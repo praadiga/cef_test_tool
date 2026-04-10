@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEF Tool — Overlay Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen p-6">
+    <div class="max-w-3xl mx-auto space-y-8">
+        <header>
+            <h1 class="text-2xl font-bold">CEF Tool — Overlay control</h1>
+            <p class="text-slate-600 text-sm mt-1">Changes apply to the live overlay over SSE. Use <strong>Apply to overlay</strong> to save.</p>
+        </header>
+
+        <p id="status-msg" class="text-sm text-slate-500 hidden" aria-live="polite"></p>
+
+        <form id="overlay-form" class="space-y-8" onsubmit="return false;">
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HTTP /main test</h2>
+                <p class="text-sm text-slate-600">Which response <code class="bg-slate-100 px-1 rounded">/main</code> returns (graphics only on 200).</p>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="px-3 py-2 rounded bg-slate-800 text-white text-sm main-status-btn" data-status="200">200 OK</button>
+                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="404">404</button>
+                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="500">500</button>
+                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="503">503</button>
+                </div>
+                <input type="hidden" id="main_status" value="200" />
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Match &amp; top bar</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="block text-sm font-medium">Series title
+                        <input type="text" id="series_title" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Viewer count
+                        <input type="text" id="viewer_count" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Team
+                        <input type="text" id="team" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Score
+                        <input type="text" id="score" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Overs
+                        <input type="text" id="overs" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Target (number only)
+                        <input type="text" id="target" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Win prob IND %
+                        <input type="number" id="prob_ind_pct" min="0" max="100" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Win prob AUS %
+                        <input type="number" id="prob_aus_pct" min="0" max="100" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                </div>
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Batting — striker</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="block text-sm font-medium sm:col-span-2">Name
+                        <input type="text" id="striker_name" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Runs
+                        <input type="text" id="striker_runs" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Balls
+                        <input type="text" id="striker_balls" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium sm:col-span-2">Extras line (e.g. 4s / 6s / SR)
+                        <input type="text" id="striker_extras" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                </div>
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Non-striker</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <label class="block text-sm font-medium">Name
+                        <input type="text" id="non_name" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Runs
+                        <input type="text" id="non_runs" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Balls
+                        <input type="text" id="non_balls" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                </div>
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Bowler</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <label class="block text-sm font-medium">Name
+                        <input type="text" id="bowler_name" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Figures (e.g. 1/34)
+                        <input type="text" id="bowler_figures" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Overs
+                        <input type="text" id="bowler_overs" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                </div>
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Breaking news ticker</h2>
+                <label class="flex items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" id="breaking_enabled" class="rounded border-slate-300" />
+                    Show breaking ticker on overlay
+                </label>
+                <label class="block text-sm font-medium">Ticker lines (one per line)
+                    <textarea id="breaking_items" rows="5" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-mono"></textarea>
+                </label>
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Recent balls</h2>
+                <label class="block text-sm font-medium">Comma-separated (e.g. 1,4,wd,6,0)
+                    <input type="text" id="recent_balls" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-mono" />
+                </label>
+            </section>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" id="btn-apply" class="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">
+                    Apply to overlay
+                </button>
+                <span id="apply-hint" class="text-sm text-slate-500"></span>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const msg = (text, ok) => {
+            const el = document.getElementById('status-msg');
+            el.textContent = text;
+            el.classList.remove('hidden', 'text-green-700', 'text-red-700');
+            el.classList.add(ok ? 'text-green-700' : 'text-red-700');
+        };
+
+        function fillForm(s) {
+            document.getElementById('main_status').value = String(s.main_status != null ? s.main_status : 200);
+            document.querySelectorAll('.main-status-btn').forEach((b) => {
+                const on = String(b.dataset.status) === String(document.getElementById('main_status').value);
+                b.classList.toggle('bg-slate-800', on);
+                b.classList.toggle('text-white', on);
+                b.classList.toggle('bg-slate-200', !on);
+            });
+
+            const set = (id, v) => {
+                const n = document.getElementById(id);
+                if (n && v != null) n.value = v;
+            };
+            set('series_title', s.series_title);
+            set('viewer_count', s.viewer_count);
+            set('team', s.team);
+            set('score', s.score);
+            set('overs', s.overs);
+            set('target', s.target);
+            set('prob_ind_pct', s.prob_ind_pct);
+            set('prob_aus_pct', s.prob_aus_pct);
+
+            const bs = s.batter_striker || {};
+            set('striker_name', bs.name);
+            set('striker_runs', bs.runs);
+            set('striker_balls', bs.balls);
+            set('striker_extras', bs.extras_line);
+
+            const bn = s.batter_non || {};
+            set('non_name', bn.name);
+            set('non_runs', bn.runs);
+            set('non_balls', bn.balls);
+
+            const bw = s.bowler || {};
+            set('bowler_name', bw.name);
+            set('bowler_figures', bw.figures);
+            set('bowler_overs', bw.overs_fig);
+
+            const br = s.breaking || {};
+            document.getElementById('breaking_enabled').checked = !!br.enabled;
+            const items = Array.isArray(br.items) ? br.items : [];
+            document.getElementById('breaking_items').value = items.join('\n');
+
+            const balls = Array.isArray(s.recent_balls) ? s.recent_balls.join(',') : '';
+            set('recent_balls', balls);
+        }
+
+        function collectPayload() {
+            const breakingText = document.getElementById('breaking_items').value;
+            const items = breakingText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+            const ballsRaw = document.getElementById('recent_balls').value;
+            const recent_balls = ballsRaw.split(/[\s,]+/).map((b) => b.trim()).filter(Boolean);
+
+            const pi = parseInt(document.getElementById('prob_ind_pct').value, 10);
+            const pa = parseInt(document.getElementById('prob_aus_pct').value, 10);
+            return {
+                main_status: parseInt(document.getElementById('main_status').value, 10) || 200,
+                series_title: document.getElementById('series_title').value,
+                viewer_count: document.getElementById('viewer_count').value,
+                team: document.getElementById('team').value,
+                score: document.getElementById('score').value,
+                overs: document.getElementById('overs').value,
+                target: document.getElementById('target').value,
+                prob_ind_pct: Number.isFinite(pi) ? pi : 68,
+                prob_aus_pct: Number.isFinite(pa) ? pa : 32,
+                batter_striker: {
+                    name: document.getElementById('striker_name').value,
+                    runs: document.getElementById('striker_runs').value,
+                    balls: document.getElementById('striker_balls').value,
+                    extras_line: document.getElementById('striker_extras').value,
+                },
+                batter_non: {
+                    name: document.getElementById('non_name').value,
+                    runs: document.getElementById('non_runs').value,
+                    balls: document.getElementById('non_balls').value,
+                },
+                bowler: {
+                    name: document.getElementById('bowler_name').value,
+                    figures: document.getElementById('bowler_figures').value,
+                    overs_fig: document.getElementById('bowler_overs').value,
+                },
+                breaking: {
+                    enabled: document.getElementById('breaking_enabled').checked,
+                    items: items,
+                },
+                recent_balls: recent_balls,
+            };
+        }
+
+        document.querySelectorAll('.main-status-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                document.getElementById('main_status').value = btn.dataset.status;
+                document.querySelectorAll('.main-status-btn').forEach((b) => {
+                    const on = b === btn;
+                    b.classList.toggle('bg-slate-800', on);
+                    b.classList.toggle('text-white', on);
+                    b.classList.toggle('bg-slate-200', !on);
+                });
+            });
+        });
+
+        async function applyOverlay() {
+            const hint = document.getElementById('apply-hint');
+            hint.textContent = 'Saving…';
+            try {
+                const payload = collectPayload();
+                const res = await fetch('/api/overlay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                fillForm(data);
+                msg('Saved. Overlay updated.', true);
+                hint.textContent = 'Last save: OK';
+            } catch (e) {
+                console.error(e);
+                msg('Save failed: ' + (e.message || e), false);
+                hint.textContent = 'Error';
+            }
+        }
+
+        document.getElementById('btn-apply').addEventListener('click', () => applyOverlay());
+
+        document.getElementById('overlay-form').addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            if (e.target.tagName === 'TEXTAREA') return;
+            if (e.target.tagName === 'BUTTON') return;
+            e.preventDefault();
+            applyOverlay();
+        });
+
+        async function loadState() {
+            try {
+                const res = await fetch('/api/overlay');
+                if (!res.ok) throw new Error('GET /api/overlay failed');
+                const data = await res.json();
+                fillForm(data);
+                document.getElementById('apply-hint').textContent = 'Loaded server state';
+            } catch (e) {
+                console.error(e);
+                msg('Could not load state: ' + (e.message || e), false);
+            }
+        }
+
+        loadState();
+    </script>
+</body>
+</html>

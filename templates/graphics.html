@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0">
+    <title>Cricket Live Broadcast Overlay</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: transparent;
+            overflow: hidden;
+        }
+
+        @keyframes tickerProgress {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+
+        .animate-progress {
+            animation: tickerProgress 5s linear infinite;
+        }
+
+        .live-pulse {
+            box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+
+        ::-webkit-scrollbar { display: none; }
+
+        .glass {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .overlay-anim {
+            transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+
+        .overlay-out {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        #ticker-section.hidden-bar {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-transparent text-white h-screen w-screen relative">
+
+    <div class="absolute top-0 left-0 right-0 p-8 flex justify-between items-start pointer-events-none">
+        <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-3">
+                <div class="bg-red-600 text-white px-3 py-1 rounded-sm text-[10px] font-black flex items-center gap-2 uppercase tracking-tighter live-pulse">
+                    <div class="w-2 h-2 bg-white rounded-full"></div>
+                    Live
+                </div>
+                <div id="series-title" class="glass px-4 py-1 rounded-sm text-[11px] font-bold uppercase tracking-widest text-slate-200">
+                    ICC Men's T20 World Cup - Final
+                </div>
+            </div>
+
+            <div class="mt-2">
+                <div class="w-56 h-1.5 bg-slate-900/80 rounded-full overflow-hidden flex border border-white/5">
+                    <div id="prob-ind" class="h-full bg-blue-500 transition-all duration-1000" style="width: 68%;"></div>
+                    <div id="prob-aus" class="h-full bg-yellow-500 transition-all duration-1000" style="width: 32%;"></div>
+                </div>
+                <div class="flex justify-between w-56 text-[10px] font-black uppercase tracking-tighter mt-1 text-slate-300">
+                    <span id="prob-ind-label">IND 68%</span>
+                    <span id="prob-aus-label">32% AUS</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass px-5 py-2.5 rounded-lg flex items-center gap-4 border border-white/10">
+            <div class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span class="text-base font-black tracking-tight" id="viewer-count">4.2Cr</span>
+                <span class="text-[9px] text-slate-400 uppercase font-bold tracking-widest">Watching</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="absolute bottom-0 left-0 right-0 p-8 flex flex-col gap-5">
+
+        <div class="flex items-end justify-between">
+
+            <div class="flex flex-col gap-3">
+                <div id="anim-score-bug" class="flex items-stretch overflow-hidden rounded-lg shadow-2xl overlay-anim">
+                    <div class="bg-gradient-to-b from-blue-600 to-blue-800 px-6 py-4 flex flex-col items-center justify-center min-w-[120px]">
+                        <span id="team-name" class="text-[11px] font-black text-blue-100 uppercase tracking-[0.2em] mb-1">INDIA</span>
+                        <span id="score-text" class="text-4xl font-black text-white leading-none tracking-tighter">184/4</span>
+                    </div>
+                    <div class="bg-white/95 px-5 py-4 flex flex-col justify-center border-l border-slate-200">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Overs</span>
+                        <span id="overs-text" class="text-2xl font-black text-slate-900 leading-none">18.4</span>
+                    </div>
+                    <div class="bg-yellow-400 px-6 py-4 flex items-center justify-center border-l border-yellow-500">
+                        <span id="target-text" class="text-xs font-black text-slate-900 uppercase italic tracking-tighter">Target: 210</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-2" id="ball-history"></div>
+            </div>
+
+            <div class="glass rounded-xl flex items-center overflow-hidden shadow-2xl min-w-[500px]">
+                <div id="anim-striker" class="flex-1 px-6 py-4 border-r border-white/5 overlay-anim">
+                    <div class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                        Batting <div class="w-1 h-1 bg-blue-400 rounded-full animate-pulse"></div>
+                    </div>
+                    <div class="flex justify-between items-baseline">
+                        <span id="batter-striker-name" class="text-lg font-black tracking-tight">V. Kohli*</span>
+                        <span class="text-lg font-black">
+                            <span id="batter-striker-runs">74</span>
+                            <span class="text-xs font-medium text-slate-400"> (<span id="batter-striker-balls">48</span>)</span>
+                        </span>
+                    </div>
+                    <div id="batter-striker-extras" class="flex gap-3 text-[10px] font-bold text-slate-400 uppercase mt-1">
+                        4s: 6  6s: 3  SR: 154.2
+                    </div>
+                </div>
+                <div id="anim-non" class="flex-1 px-6 py-4 border-r border-white/5 opacity-60 overlay-anim">
+                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Non-Striker</div>
+                    <div class="flex justify-between items-baseline">
+                        <span id="batter-non-name" class="text-sm font-bold tracking-tight">H. Pandya</span>
+                        <span class="text-sm font-bold">
+                            <span id="batter-non-runs">28</span>
+                            <span class="text-[10px] font-normal text-slate-500"> (<span id="batter-non-balls">14</span>)</span>
+                        </span>
+                    </div>
+                </div>
+                <div id="anim-bowler" class="px-6 py-4 bg-white/5 overlay-anim">
+                    <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Bowler</div>
+                    <div class="text-right">
+                        <div id="bowler-name" class="text-base font-black tracking-tight">M. Starc</div>
+                        <div class="text-xs font-black text-blue-400">
+                            <span id="bowler-figures">1/34</span>
+                            <span class="text-slate-500 text-[10px]">(<span id="bowler-overs">3.4</span>)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="ticker-section" class="relative h-11 bg-slate-900/90 backdrop-blur-md rounded-lg border border-white/5 overflow-hidden flex items-center group overlay-anim">
+            <div class="absolute left-0 top-0 bottom-0 bg-yellow-500 px-6 flex items-center z-20 shadow-[8px_0_20px_rgba(0,0,0,0.4)]">
+                <span class="text-xs font-black text-slate-900 uppercase tracking-widest italic">Breaking</span>
+            </div>
+            <div class="pl-36 pr-8 w-full relative h-full flex items-center overflow-hidden">
+                <div id="ticker-text" class="text-sm font-bold tracking-wide text-white transition-all duration-500 transform translate-x-0 opacity-100">
+                    Virat Kohli becomes the first player to reach 4000 T20I runs.
+                </div>
+                <div class="absolute bottom-0 left-0 right-0 h-[3px] bg-white/5">
+                    <div id="ticker-progress" class="h-full bg-blue-500/50 w-0 animate-progress"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let overlayInitialized = false;
+        let previousPayload = null;
+        let tickerItems = [];
+        let tickerIndex = 0;
+        let tickerIntervalId = null;
+
+        function prefersReducedMotion() {
+            return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        }
+
+        function sliceScore(d) {
+            return JSON.stringify({
+                team: d.team, score: d.score, overs: d.overs, target: d.target
+            });
+        }
+
+        function sliceStriker(d) {
+            return JSON.stringify(d.batter_striker || {});
+        }
+
+        function sliceNon(d) {
+            return JSON.stringify(d.batter_non || {});
+        }
+
+        function sliceBowler(d) {
+            return JSON.stringify(d.bowler || {});
+        }
+
+        function sliceMeta(d) {
+            return JSON.stringify({
+                series_title: d.series_title,
+                viewer_count: d.viewer_count,
+                prob_ind_pct: d.prob_ind_pct,
+                prob_aus_pct: d.prob_aus_pct,
+                recent_balls: d.recent_balls
+            });
+        }
+
+        function renderMeta(d) {
+            const el = (id) => document.getElementById(id);
+            if (d.series_title != null) el('series-title').textContent = d.series_title;
+            if (d.viewer_count != null) el('viewer-count').textContent = d.viewer_count;
+            const pi = d.prob_ind_pct != null ? d.prob_ind_pct : 68;
+            const pa = d.prob_aus_pct != null ? d.prob_aus_pct : 32;
+            el('prob-ind').style.width = pi + '%';
+            el('prob-aus').style.width = pa + '%';
+            el('prob-ind-label').textContent = 'IND ' + pi + '%';
+            el('prob-aus-label').textContent = pa + '% AUS';
+            updateBallHistory(d.recent_balls || []);
+        }
+
+        function renderScore(d) {
+            document.getElementById('team-name').textContent = d.team || '';
+            document.getElementById('score-text').textContent = d.score || '';
+            document.getElementById('overs-text').textContent = d.overs || '';
+            const t = d.target != null ? String(d.target) : '';
+            document.getElementById('target-text').textContent = t ? ('Target: ' + t) : '';
+        }
+
+        function renderStriker(d) {
+            const b = d.batter_striker || {};
+            document.getElementById('batter-striker-name').textContent = b.name || '';
+            document.getElementById('batter-striker-runs').textContent = b.runs != null ? b.runs : '';
+            document.getElementById('batter-striker-balls').textContent = b.balls != null ? b.balls : '';
+            const ex = document.getElementById('batter-striker-extras');
+            if (b.extras_line != null) ex.textContent = b.extras_line;
+        }
+
+        function renderNon(d) {
+            const b = d.batter_non || {};
+            document.getElementById('batter-non-name').textContent = b.name || '';
+            document.getElementById('batter-non-runs').textContent = b.runs != null ? b.runs : '';
+            document.getElementById('batter-non-balls').textContent = b.balls != null ? b.balls : '';
+        }
+
+        function renderBowler(d) {
+            const b = d.bowler || {};
+            document.getElementById('bowler-name').textContent = b.name || '';
+            document.getElementById('bowler-figures').textContent = b.figures != null ? b.figures : '';
+            document.getElementById('bowler-overs').textContent = b.overs_fig != null ? b.overs_fig : '';
+        }
+
+        function updateBallHistory(balls) {
+            const container = document.getElementById('ball-history');
+            if (!container) return;
+            container.innerHTML = (balls || []).map(ball => {
+                let colorClass = 'bg-slate-800 text-slate-400';
+                if (ball === '4') colorClass = 'bg-blue-600 text-white shadow-lg shadow-blue-900/40 ring-2 ring-blue-400/20';
+                if (ball === '6') colorClass = 'bg-yellow-500 text-slate-900 shadow-lg shadow-yellow-500/40 ring-2 ring-yellow-400/20';
+                if (ball === 'wd' || ball === 'nb') colorClass = 'bg-slate-600 text-slate-100';
+                return `<div class="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black ${colorClass}">${ball}</div>`;
+            }).join('');
+        }
+
+        function transitionPanel(id, applyFn, useAnim) {
+            const el = document.getElementById(id);
+            if (!el) return Promise.resolve();
+            if (!useAnim) {
+                applyFn();
+                return Promise.resolve();
+            }
+            return new Promise((resolve) => {
+                el.classList.add('overlay-out');
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    applyFn();
+                    requestAnimationFrame(() => {
+                        el.classList.remove('overlay-out');
+                        resolve();
+                    });
+                };
+                const onEnd = (e) => {
+                    if (e.propertyName !== 'opacity') return;
+                    el.removeEventListener('transitionend', onEnd);
+                    finish();
+                };
+                el.addEventListener('transitionend', onEnd);
+                setTimeout(finish, 400);
+            });
+        }
+
+        function wasBreakingOn(d) {
+            return !!(d && d.breaking && d.breaking.enabled);
+        }
+
+        function applyTickerDom(d) {
+            const br = d.breaking || {};
+            const sec = document.getElementById('ticker-section');
+            tickerItems = Array.isArray(br.items) ? br.items.slice() : [];
+            stopTickerRotation();
+            if (!br.enabled) {
+                sec.classList.add('hidden-bar');
+                return;
+            }
+            sec.classList.remove('hidden-bar');
+            const textEl = document.getElementById('ticker-text');
+            if (tickerItems.length) {
+                textEl.innerText = tickerItems[0] || '';
+                tickerIndex = 0;
+                resetTickerProgressAnimation();
+                startTickerRotation();
+            } else {
+                textEl.innerText = '';
+            }
+        }
+
+        function runBreakingTransition(prev, data, useAnim) {
+            if (!useAnim) {
+                applyTickerDom(data);
+                return Promise.resolve();
+            }
+            const sec = document.getElementById('ticker-section');
+            const pOn = wasBreakingOn(prev);
+            const nOn = wasBreakingOn(data);
+
+            if (!pOn && !nOn) {
+                applyTickerDom(data);
+                return Promise.resolve();
+            }
+
+            if (pOn && !nOn) {
+                sec.classList.remove('hidden-bar');
+                sec.classList.add('overlay-out');
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        applyTickerDom(data);
+                        sec.classList.remove('overlay-out');
+                        resolve();
+                    }, 400);
+                });
+            }
+
+            if (!pOn && nOn) {
+                const br = data.breaking || {};
+                tickerItems = Array.isArray(br.items) ? br.items.slice() : [];
+                const textEl = document.getElementById('ticker-text');
+                sec.classList.remove('hidden-bar');
+                stopTickerRotation();
+                if (tickerItems.length) {
+                    textEl.innerText = tickerItems[0] || '';
+                    tickerIndex = 0;
+                } else {
+                    textEl.innerText = '';
+                }
+                sec.classList.add('overlay-out');
+                return new Promise((resolve) => {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            sec.classList.remove('overlay-out');
+                            resetTickerProgressAnimation();
+                            if (tickerItems.length) {
+                                startTickerRotation();
+                            }
+                            resolve();
+                        });
+                    });
+                });
+            }
+
+            return transitionPanel('ticker-section', () => applyTickerDom(data), true);
+        }
+
+        function stopTickerRotation() {
+            if (tickerIntervalId) {
+                clearInterval(tickerIntervalId);
+                tickerIntervalId = null;
+            }
+        }
+
+        function resetTickerProgressAnimation() {
+            const progressEl = document.getElementById('ticker-progress');
+            progressEl.style.animation = 'none';
+            void progressEl.offsetHeight;
+            progressEl.style.animation = 'tickerProgress 5s linear infinite';
+        }
+
+        function rotateTicker() {
+            const textEl = document.getElementById('ticker-text');
+            const progressEl = document.getElementById('ticker-progress');
+            if (!tickerItems.length) return;
+            textEl.classList.add('opacity-0', 'translate-y-2');
+            setTimeout(() => {
+                tickerIndex = (tickerIndex + 1) % tickerItems.length;
+                textEl.innerText = tickerItems[tickerIndex];
+                resetTickerProgressAnimation();
+                textEl.classList.remove('opacity-0', 'translate-y-2');
+            }, 500);
+        }
+
+        function startTickerRotation() {
+            stopTickerRotation();
+            const textEl = document.getElementById('ticker-text');
+            if (tickerItems.length) {
+                textEl.innerText = tickerItems[0];
+                tickerIndex = 0;
+                resetTickerProgressAnimation();
+            }
+            tickerIntervalId = setInterval(rotateTicker, 5000);
+        }
+
+        function applyOverlayState(data) {
+            const reduced = prefersReducedMotion();
+            const useAnim = overlayInitialized && !reduced;
+
+            if (!overlayInitialized) {
+                renderMeta(data);
+                renderScore(data);
+                renderStriker(data);
+                renderNon(data);
+                renderBowler(data);
+                applyTickerDom(data);
+                overlayInitialized = true;
+                previousPayload = JSON.parse(JSON.stringify(data));
+                return;
+            }
+
+            const prev = previousPayload;
+            const tasks = [];
+
+            if (sliceMeta(prev) !== sliceMeta(data)) {
+                renderMeta(data);
+            }
+
+            if (sliceScore(prev) !== sliceScore(data)) {
+                tasks.push(transitionPanel('anim-score-bug', () => renderScore(data), useAnim));
+            }
+
+            if (sliceStriker(prev) !== sliceStriker(data)) {
+                tasks.push(transitionPanel('anim-striker', () => renderStriker(data), useAnim));
+            }
+
+            if (sliceNon(prev) !== sliceNon(data)) {
+                tasks.push(transitionPanel('anim-non', () => renderNon(data), useAnim));
+            }
+
+            if (sliceBowler(prev) !== sliceBowler(data)) {
+                tasks.push(transitionPanel('anim-bowler', () => renderBowler(data), useAnim));
+            }
+
+            const brPrev = JSON.stringify((prev.breaking || {}));
+            const brNew = JSON.stringify((data.breaking || {}));
+            if (brPrev !== brNew) {
+                tasks.push(runBreakingTransition(prev, data, useAnim));
+            }
+
+            const savePrev = () => {
+                previousPayload = JSON.parse(JSON.stringify(data));
+            };
+            if (tasks.length) {
+                Promise.all(tasks).then(savePrev);
+            } else {
+                savePrev();
+            }
+        }
+
+        const es = new EventSource('/api/stream');
+        es.onmessage = function (ev) {
+            try {
+                const data = JSON.parse(ev.data);
+                applyOverlayState(data);
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        es.onerror = function () {
+            /* browser will retry */
+        };
+    </script>
+</body>
+</html>
