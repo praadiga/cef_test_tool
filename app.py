@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, abort, jsonify, Response, str
 app = Flask(__name__)
 
 _state_lock = threading.RLock()
-_sse_clients: list = []
+_sse_clients = []
 
 DEFAULT_OVERLAY = {
     "main_status": 200,
@@ -96,7 +96,7 @@ def return_error(code):
 @app.route("/delay/<int:seconds>")
 def return_delay(seconds):
     time.sleep(seconds)
-    return f"<h1>Response delivered after {seconds} seconds delay</h1>"
+    return "<h1>Response delivered after {} seconds delay</h1>".format(seconds)
 
 
 # 3. Controlled Main Endpoint
@@ -132,16 +132,16 @@ def redirect_route():
 @app.route("/api/stream")
 def sse_stream():
     def generate():
-        q: queue.Queue = queue.Queue(maxsize=8)
+        q = queue.Queue(maxsize=8)
         with _state_lock:
             _sse_clients.append(q)
             first = state_json()
         try:
-            yield f"data: {first}\n\n"
+            yield "data: {}\n\n".format(first)
             while True:
                 try:
                     msg = q.get(timeout=25)
-                    yield f"data: {msg}\n\n"
+                    yield "data: {}\n\n".format(msg)
                 except queue.Empty:
                     yield ": ping\n\n"
         finally:
@@ -198,7 +198,9 @@ if __name__ == "__main__":
     host = os.environ.get("FLASK_HOST", "0.0.0.0")
     port = int(os.environ.get("FLASK_PORT", "5000"))
     print(
-        f"Flask: http://{host}:{port}/  (from another device use this machine's LAN IP, e.g. http://192.168.x.x:{port}/ )",
+        "Flask: http://{}:{}/  (from another device use this machine's LAN IP, e.g. http://192.168.x.x:{}/ )".format(
+            host, port, port
+        ),
         flush=True,
     )
     app.run(host=host, port=port, debug=True, threaded=True)
