@@ -1,9 +1,10 @@
 import copy
 import json
+import os
 import queue
 import threading
 import time
-from flask import Flask, render_template, request, abort, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, abort, jsonify, Response, stream_with_context, redirect
 
 app = Flask(__name__)
 
@@ -123,6 +124,10 @@ def post_overlay():
     notify_sse_subscribers()
     return jsonify(state_snapshot())
 
+# redirect to https://main.d1qoagnu7ropxn.amplifyapp.com/
+@app.route("/redirect")
+def redirect_route():
+    return redirect("https://main.d1qoagnu7ropxn.amplifyapp.com/")
 
 @app.route("/api/stream")
 def sse_stream():
@@ -161,5 +166,39 @@ def admin():
     return render_template("admin.html")
 
 
+@app.route("/fail-midway")
+def fail_midway():
+    """Stream broadcast-style HTML first (200), then abort mid-body after a delay (CEF/network test)."""
+    first_chunk = render_template("fail_midway_partial.html")
+
+    def generate():
+        yield first_chunk
+        time.sleep(2)
+        raise RuntimeError("fail_midway: intentional stream abort")
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/html; charset=utf-8",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+#home route should return all the routes in the app
+@app.route("/")
+def home():
+    return render_template("home.html", routes=app.url_map.iter_rules())
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000, threaded=True)
+    # 0.0.0.0 = listen on all interfaces so other machines on the LAN can connect.
+    # If still unreachable: allow the port in the OS firewall (e.g. ufw allow 5000/tcp)
+    # and on cloud VMs open the security group / inbound rule for this port.
+    host = os.environ.get("FLASK_HOST", "0.0.0.0")
+    port = int(os.environ.get("FLASK_PORT", "5000"))
+    print(
+        f"Flask: http://{host}:{port}/  (from another device use this machine's LAN IP, e.g. http://192.168.x.x:{port}/ )",
+        flush=True,
+    )
+    app.run(host=host, port=port, debug=True, threaded=True)

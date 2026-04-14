@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0">
+    <title>Broadcast overlay (partial stream)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            width: 1920px;
+            height: 1080px;
+            background: linear-gradient(180deg, rgba(15,23,42,0.35) 0%, transparent 40%, rgba(15,23,42,0.25) 100%);
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .glass {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .live-pulse {
+            box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+        }
+    </style>
+</head>
+<body class="text-white relative">
+    <div class="absolute top-6 left-8 right-8 flex justify-between items-start pointer-events-none">
+        <div class="flex items-center gap-3">
+            <div class="bg-red-600 text-white px-3 py-1 rounded-sm text-[10px] font-black flex items-center gap-2 uppercase tracking-tighter live-pulse">
+                <span class="w-2 h-2 bg-white rounded-full"></span>
+                Live
+            </div>
+            <div class="glass px-4 py-1 rounded-sm text-[11px] font-bold uppercase tracking-widest text-slate-200">
+                /fail-midway — graphics first
+            </div>
+        </div>
+        <div class="rounded-md border border-amber-500/80 bg-amber-500/20 px-3 py-1.5 text-[11px] font-bold text-amber-100 uppercase tracking-wide">
+            Stream will abort below this layout
+        </div>
+    </div>
+
+    <div class="absolute bottom-8 left-8 right-8 flex flex-col gap-4">
+        <div class="flex items-end justify-between gap-6">
+            <div class="flex flex-col gap-3">
+                <div class="flex items-stretch overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10">
+                    <div class="bg-gradient-to-b from-blue-600 to-blue-800 px-6 py-4 flex flex-col items-center justify-center min-w-[120px]">
+                        <span class="text-[11px] font-black text-blue-100 uppercase tracking-[0.2em] mb-1">INDIA</span>
+                        <span class="text-4xl font-black text-white leading-none tracking-tighter">184/4</span>
+                    </div>
+                    <div class="bg-white/95 px-5 py-4 flex flex-col justify-center border-l border-slate-200">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Overs</span>
+                        <span class="text-2xl font-black text-slate-900 leading-none">18.4</span>
+                    </div>
+                    <div class="bg-yellow-400 px-6 py-4 flex items-center justify-center border-l border-yellow-500">
+                        <span class="text-xs font-black text-slate-900 uppercase italic tracking-tighter">Target: 210</span>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-[11px] font-black">4</div>
+                    <div class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[11px] font-black">1</div>
+                    <div class="w-8 h-8 rounded-full bg-yellow-500 text-slate-900 flex items-center justify-center text-[11px] font-black">6</div>
+                </div>
+            </div>
+
+            <div class="glass rounded-xl flex items-stretch overflow-hidden shadow-2xl min-w-[480px] flex-1 max-w-[720px]">
+                <div class="flex-1 px-5 py-4 border-r border-white/5">
+                    <div class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Batting</div>
+                    <div class="flex justify-between items-baseline gap-4">
+                        <span class="text-lg font-black tracking-tight">V. Kohli*</span>
+                        <span class="text-lg font-black">74 <span class="text-xs font-medium text-slate-400">(48)</span></span>
+                    </div>
+                </div>
+                <div class="flex-1 px-5 py-4 border-r border-white/5 opacity-70">
+                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Non-Striker</div>
+                    <div class="flex justify-between items-baseline gap-4">
+                        <span class="text-sm font-bold">H. Pandya</span>
+                        <span class="text-sm font-bold">28 <span class="text-[10px] font-normal text-slate-500">(14)</span></span>
+                    </div>
+                </div>
+                <div class="px-5 py-4 bg-white/5 min-w-[140px]">
+                    <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-right">Bowler</div>
+                    <div class="text-right">
+                        <div class="text-base font-black tracking-tight">M. Starc</div>
+                        <div class="text-xs font-black text-blue-400">1/34 <span class="text-slate-500 text-[10px]">(3.4)</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="h-11 rounded-lg border border-white/10 bg-slate-900/90 flex items-center px-4 text-sm font-semibold text-slate-300">
+            <span class="bg-yellow-500 text-slate-900 text-xs font-black px-3 py-1 rounded-sm mr-4 uppercase tracking-widest">Breaking</span>
+            <span class="text-white/90">Ticker and remainder of page never arrive — connection ends mid-stream after delay.</span>
+        </div>
+    </div>
+    <!-- Intentionally no closing tags: next chunk never sent -->
