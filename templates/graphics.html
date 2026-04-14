@@ -172,6 +172,7 @@
     <script>
         let overlayInitialized = false;
         let previousPayload = null;
+        let lastSoundSeq = null;
         let tickerItems = [];
         let tickerIndex = 0;
         let tickerIntervalId = null;
@@ -467,10 +468,77 @@
             }
         }
 
+        function playBeepFallback(clip) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return;
+            const ctx = new AC();
+            const freq = {
+                four: 523.25,
+                six: 783.99,
+                wicket: 155.56,
+                cheer: 523.25,
+                default: 330,
+            }[clip] || 440;
+            const dur = clip === 'six' ? 0.22 : 0.18;
+            const run = () => {
+                const osc = ctx.createOscillator();
+                const g = ctx.createGain();
+                osc.connect(g);
+                g.connect(ctx.destination);
+                osc.frequency.value = freq;
+                osc.type = 'sine';
+                const t0 = ctx.currentTime;
+                g.gain.setValueAtTime(0.0001, t0);
+                g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+                osc.start(t0);
+                osc.stop(t0 + dur + 0.02);
+            };
+            if (ctx.state === 'suspended') {
+                ctx.resume().then(run).catch(run);
+            } else {
+                run();
+            }
+        }
+
+        function playSoundCue(clip) {
+            if (!clip) return;
+            const path = '/static/sounds/' + encodeURIComponent(clip) + '.mp3';
+            console.log('[overlay/sound] playSoundCue clip=%s url=%s', clip, path);
+            const a = new Audio(path);
+            a.play()
+                .then(function () {
+                    console.log('[overlay/sound] audio playing ok:', path);
+                })
+                .catch(function (err) {
+                    console.warn('[overlay/sound] mp3 play failed, beep fallback:', err && err.message ? err.message : err);
+                    playBeepFallback(clip);
+                });
+        }
+
         const es = new EventSource('/api/stream');
         es.onmessage = function (ev) {
             try {
                 const data = JSON.parse(ev.data);
+                const snd = data.sound;
+                if (snd && typeof snd.seq === 'number') {
+                    console.log(
+                        '[overlay/sound] SSE received sound seq=%s clip=%s lastSoundSeq=%s',
+                        snd.seq,
+                        snd.clip,
+                        lastSoundSeq
+                    );
+                    if (lastSoundSeq === null) {
+                        lastSoundSeq = snd.seq;
+                        console.log('[overlay/sound] init lastSoundSeq (no play on first snapshot)');
+                    } else if (snd.seq > lastSoundSeq) {
+                        lastSoundSeq = snd.seq;
+                        console.log('[overlay/sound] new cue — calling playSoundCue');
+                        playSoundCue(snd.clip);
+                    } else {
+                        console.log('[overlay/sound] seq not newer; skip play');
+                    }
+                }
                 applyOverlayState(data);
             } catch (err) {
                 console.error(err);

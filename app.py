@@ -47,6 +47,7 @@ DEFAULT_OVERLAY = {
         ],
     },
     "recent_balls": ["1", "4", "wd", "6", "1", "0", "4"],
+    "sound": {"seq": 0, "clip": None},
 }
 
 app_state = copy.deepcopy(DEFAULT_OVERLAY)
@@ -124,6 +125,27 @@ def post_overlay():
     notify_sse_subscribers()
     return jsonify(state_snapshot())
 
+
+@app.route("/api/sound", methods=["POST"])
+def post_sound():
+    """Bump sound seq and push over SSE so /main (graphics) can play a cue."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    clip = data.get("clip") or data.get("id")
+    if clip is not None and not isinstance(clip, str):
+        return jsonify({"error": "clip must be a string"}), 400
+    if not clip:
+        clip = "default"
+    with _state_lock:
+        s = app_state.setdefault("sound", {"seq": 0, "clip": None})
+        s["seq"] = int(s.get("seq", 0)) + 1
+        s["clip"] = clip
+        sound_out = copy.deepcopy(app_state["sound"])
+    notify_sse_subscribers()
+    return jsonify({"ok": True, "sound": sound_out})
+
+
 # redirect to https://main.d1qoagnu7ropxn.amplifyapp.com/
 @app.route("/redirect")
 def redirect_route():
@@ -173,6 +195,9 @@ def display():
         text="Live Streaming Dashboard",
     )
 
+@app.route("/audio")
+def audio():
+    return redirect("https://soundcloud.com/platform/sama")
 
 @app.route("/fail-midway")
 def fail_midway():

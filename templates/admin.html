@@ -18,6 +18,17 @@
         <form id="overlay-form" class="space-y-8" onsubmit="return false;">
 
             <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Sounds on /main</h2>
+                <p class="text-sm text-slate-600">Plays on the live overlay page (same SSE as overlay). Add <code class="bg-slate-100 px-1 rounded">static/sounds/&lt;clip&gt;.mp3</code> or the page uses short beeps.</p>
+                <div class="flex flex-wrap gap-2">
+                    <!-- <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="four">Four</button>
+                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="six">Six</button>
+                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="wicket">Wicket</button> -->
+                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="cheer">Cheer</button>
+                </div>
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HTTP /main test</h2>
                 <p class="text-sm text-slate-600">Which response <code class="bg-slate-100 px-1 rounded">/main</code> returns (graphics only on 200).</p>
                 <div class="flex flex-wrap gap-2">
@@ -240,6 +251,7 @@
                     b.classList.toggle('text-white', on);
                     b.classList.toggle('bg-slate-200', !on);
                 });
+                applyOverlay();
             });
         });
 
@@ -266,6 +278,24 @@
         }
 
         document.getElementById('btn-apply').addEventListener('click', () => applyOverlay());
+
+        document.querySelectorAll('.sound-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const clip = btn.dataset.clip;
+                try {
+                    const res = await fetch('/api/sound', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ clip }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    msg('Sound queued for /main: ' + clip, true);
+                } catch (e) {
+                    console.error(e);
+                    msg('Sound failed: ' + (e.message || e), false);
+                }
+            });
+        });
 
         document.getElementById('overlay-form').addEventListener('keydown', (e) => {
             if (e.key !== 'Enter') return;
