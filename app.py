@@ -165,6 +165,14 @@ def sse_stream():
 def admin():
     return render_template("admin.html")
 
+@app.route("/video")
+def display():
+    return render_template(
+        "video.html",
+        video_url="/static/output2.mp4",
+        text="Live Streaming Dashboard",
+    )
+
 
 @app.route("/fail-midway")
 def fail_midway():
