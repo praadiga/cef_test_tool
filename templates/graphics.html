@@ -56,9 +56,71 @@
         #ticker-section.hidden-bar {
             display: none !important;
         }
+
+        #sound-viz {
+            transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+
+        #sound-viz.sound-viz-on {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #sound-viz:not(.sound-viz-on) {
+            opacity: 0;
+            transform: translateY(6px);
+            pointer-events: none;
+        }
+
+        .eq-bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 3px;
+            height: 28px;
+        }
+
+        .eq-bar {
+            width: 5px;
+            min-height: 4px;
+            border-radius: 2px;
+            background: linear-gradient(to top, #06b6d4, #67e8f9);
+            transform-origin: bottom;
+            animation: eqJump 0.42s ease-in-out infinite alternate;
+        }
+
+        .eq-bar:nth-child(1) { animation-delay: 0ms; height: 35%; }
+        .eq-bar:nth-child(2) { animation-delay: 80ms; height: 55%; }
+        .eq-bar:nth-child(3) { animation-delay: 160ms; height: 75%; }
+        .eq-bar:nth-child(4) { animation-delay: 120ms; height: 45%; }
+        .eq-bar:nth-child(5) { animation-delay: 40ms; height: 90%; }
+
+        @keyframes eqJump {
+            from { transform: scaleY(0.35); filter: brightness(0.9); }
+            to { transform: scaleY(1); filter: brightness(1.15); }
+        }
+
+        .sound-viz-on .eq-bar {
+            animation-play-state: running;
+        }
+
+        #sound-viz:not(.sound-viz-on) .eq-bar {
+            animation-play-state: paused;
+        }
     </style>
 </head>
 <body class="bg-transparent text-white h-screen w-screen relative">
+
+    <div id="sound-viz" class="fixed top-24 right-8 z-[200] glass rounded-xl px-4 py-3 flex flex-col items-center gap-2 border border-cyan-400/40 shadow-lg shadow-cyan-950/40 pointer-events-none" aria-hidden="true" role="status">
+        <div class="eq-bars" aria-hidden="true">
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+        </div>
+        <span id="sound-viz-label" class="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200">Audio</span>
+    </div>
 
     <div class="absolute top-0 left-0 right-0 p-8 flex justify-between items-start pointer-events-none">
         <div class="flex flex-col gap-2">
@@ -468,9 +530,41 @@
             }
         }
 
+        let soundVizHideTimer = null;
+
+        function showSoundVisualization(clip) {
+            const root = document.getElementById('sound-viz');
+            const label = document.getElementById('sound-viz-label');
+            if (label) label.textContent = String(clip || 'cue').toUpperCase();
+            if (root) {
+                root.classList.add('sound-viz-on');
+                root.setAttribute('aria-hidden', 'false');
+            }
+            clearTimeout(soundVizHideTimer);
+            soundVizHideTimer = null;
+        }
+
+        function hideSoundVisualization() {
+            const root = document.getElementById('sound-viz');
+            if (root) {
+                root.classList.remove('sound-viz-on');
+                root.setAttribute('aria-hidden', 'true');
+            }
+            clearTimeout(soundVizHideTimer);
+            soundVizHideTimer = null;
+        }
+
+        function scheduleHideSoundViz(ms) {
+            clearTimeout(soundVizHideTimer);
+            soundVizHideTimer = setTimeout(hideSoundVisualization, ms);
+        }
+
         function playBeepFallback(clip) {
             const AC = window.AudioContext || window.webkitAudioContext;
-            if (!AC) return;
+            if (!AC) {
+                scheduleHideSoundViz(600);
+                return;
+            }
             const ctx = new AC();
             const freq = {
                 four: 523.25,
@@ -480,6 +574,8 @@
                 default: 330,
             }[clip] || 440;
             const dur = clip === 'six' ? 0.22 : 0.18;
+            const hideAfterMs = (dur + 0.07) * 1000 + 80;
+            scheduleHideSoundViz(hideAfterMs);
             const run = () => {
                 const osc = ctx.createOscillator();
                 const g = ctx.createGain();
@@ -503,15 +599,25 @@
 
         function playSoundCue(clip) {
             if (!clip) return;
+            showSoundVisualization(clip);
             const path = '/static/sounds/' + encodeURIComponent(clip) + '.mp3';
             console.log('[overlay/sound] playSoundCue clip=%s url=%s', clip, path);
             const a = new Audio(path);
+            const cleanup = function () {
+                a.removeEventListener('ended', cleanup);
+                a.removeEventListener('error', cleanup);
+                hideSoundVisualization();
+            };
+            a.addEventListener('ended', cleanup);
+            a.addEventListener('error', cleanup);
             a.play()
                 .then(function () {
                     console.log('[overlay/sound] audio playing ok:', path);
                 })
                 .catch(function (err) {
                     console.warn('[overlay/sound] mp3 play failed, beep fallback:', err && err.message ? err.message : err);
+                    a.removeEventListener('ended', cleanup);
+                    a.removeEventListener('error', cleanup);
                     playBeepFallback(clip);
                 });
         }
