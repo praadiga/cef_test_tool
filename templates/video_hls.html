@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Background HLS</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; min-height: 100%; }
+        body {
+            position: relative;
+            overflow-x: hidden;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+            color: #fff;
+            background: #000;
+        }
+        .bg-video {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .overlay {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        }
+        .overlay h1 { font-size: clamp(1.75rem, 5vw, 3rem); font-weight: 600; margin: 0 0 0.5rem; }
+        .overlay p { font-size: clamp(1rem, 2.5vw, 1.25rem); opacity: 0.9; margin: 0; }
+        .mono { font-size: 0.75rem; opacity: 0.75; word-break: break-all; max-width: 90vw; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+</head>
+<body>
+    <video
+        id="hls-vid"
+        class="bg-video"
+        playsinline
+        muted
+        preload="auto"
+    ></video>
+    <div class="overlay">
+        <h1 id="hls-title">HLS</h1>
+        <p id="hls-status">Connecting…</p>
+        <p id="hls-url-hint" class="mono" aria-label="Stream URL"></p>
+    </div>
+    <script>
+(function () {
+    "use strict";
+
+    var PREFIX = "[video_hls]";
+
+    function log() {
+        var a = [PREFIX].concat(Array.prototype.slice.call(arguments));
+        console.log.apply(console, a);
+    }
+    function logWarn() {
+        var a = [PREFIX].concat(Array.prototype.slice.call(arguments));
+        console.warn.apply(console, a);
+    }
+    function logError() {
+        var a = [PREFIX].concat(Array.prototype.slice.call(arguments));
+        console.error.apply(console, a);
+    }
+
+    var video = document.getElementById("hls-vid");
+    var elStatus = document.getElementById("hls-status");
+    var elUrl = document.getElementById("hls-url-hint");
+    var elTitle = document.getElementById("hls-title");
+
+    var server = {
+        enabled: {{ "true" if hls_enabled else "false" }},
+        url: {{ hls_url | tojson }},
+        seq: {{ hls_seq | int }}
+    };
+    var hls = null;
+    var es = null;
+    // Align with server seq so the first /api/stream snapshot does not double-apply the same state.
+    var lastSeq = server.seq;
+    var lastUrl = null;
+
+    function setStatus(text) {
+        elStatus.textContent = text;
+    }
+
+    function setUrlLine(text) {
+        elUrl.textContent = "URL: " + (text || "—");
+    }
+
+    function destroyHls() {
+        if (hls) {
+            try {
+                log("destroying hls.js instance");
+                hls.destroy();
+            } catch (e) {
+                logWarn("hls.destroy() error", e);
+            }
+            hls = null;
+        } else {
+            log("destroyHls: no hls instance");
+        }
+    }
+
+    function clearVideo() {
+        destroyHls();
+        try {
+            video.removeAttribute("src");
+            video.load();
+        } catch (e) {
+            logWarn("clearVideo: load() error", e);
+        }
+    }
+
+    function canPlayNativeHls() {
+        return video.canPlayType("application/vnd.apple.mpegurl");
+    }
+
+    function attachHlsUrl(url) {
+        if (!url) {
+            logError("attachHlsUrl: empty url");
+            return;
+        }
+        lastUrl = url;
+        setUrlLine(url);
+        log("attaching HLS", { url: url, hlsjsSupported: typeof Hls !== "undefined" && Hls.isSupported(), native: !!canPlayNativeHls() });
+
+        destroyHls();
+        if (typeof Hls !== "undefined" && Hls.isSupported()) {
+            hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+            hls.on(Hls.Events.MEDIA_ATTACHED, function () {
+                log("Hls.Events.MEDIA_ATTACHED");
+            });
+            hls.on(Hls.Events.MANIFEST_PARSED, function (ev, data) {
+                log("Hls.Events.MANIFEST_PARSED", { levels: (data && data.levels) ? data.levels.length : 0 });
+                tryPlay();
+            });
+            hls.on(Hls.Events.ERROR, function (ev, data) {
+                if (data && data.fatal) {
+                    logError("Hls fatal error", { type: data.type, details: data.details, fatal: data.fatal });
+                } else {
+                    logWarn("Hls non-fatal event", { type: (data && data.type), details: (data && data.details) });
+                }
+            });
+            hls.loadSource(url);
+            hls.attachMedia(video);
+        } else if (canPlayNativeHls()) {
+            log("using native HLS (Safari / Apple)");
+            video.src = url;
+            video.addEventListener("loadedmetadata", function onM() {
+                video.removeEventListener("loadedmetadata", onM);
+                tryPlay();
+            }, { once: true });
+        } else {
+            setStatus("HLS not supported in this environment (no MSE, no native HLS).");
+            logError("HLS: neither hls.js nor native source available");
+        }
+    }
+
+    function tryPlay() {
+        video.muted = true;
+        var p = video.play();
+        if (p && p.then) {
+            p.then(function () {
+                log("video.play() resolved");
+            }).catch(function (e) {
+                logWarn("video.play() rejected, retrying muted", e);
+                video.muted = true;
+                return video.play();
+            });
+        }
+    }
+
+    function applyHlsState(h) {
+        if (!h || typeof h !== "object") {
+            logWarn("applyHlsState: invalid payload", h);
+            return;
+        }
+        var en = !!h.enabled;
+        var u = h.url;
+        var seq = parseInt(h.seq, 10);
+        if (!Number.isFinite(seq)) {
+            logWarn("applyHlsState: bad seq, ignoring", h.seq);
+            return;
+        }
+        if (lastSeq === seq) {
+            log("applyHlsState: same seq, skip (duplicate SSE)", { seq: seq });
+            return;
+        }
+        lastSeq = seq;
+        log("applyHlsState: applying", { enabled: en, url: u, seq: seq });
+
+        server.enabled = en;
+        server.url = u;
+        server.seq = seq;
+
+        if (!en) {
+            setStatus("HLS stopped (from admin / API)");
+            setUrlLine("—");
+            elTitle.textContent = "HLS — stopped";
+            try {
+                video.pause();
+            } catch (e) {
+                logWarn("pause() error", e);
+            }
+            clearVideo();
+            return;
+        }
+
+        elTitle.textContent = "HLS — playing";
+        if (u) {
+            setStatus("Loading HLS…");
+            attachHlsUrl(u);
+            tryPlay();
+        } else {
+            setStatus("No HLS URL configured.");
+            logWarn("enabled but empty url");
+        }
+    }
+
+    // Initial render from Jinja
+    setUrlLine(server.url);
+    if (server.enabled && server.url) {
+        lastSeq = -1; // allow apply; then matches server
+        applyHlsState({ enabled: true, url: server.url, seq: server.seq });
+    } else {
+        setStatus("HLS not started. Enable in /admin or POST /api/hls.");
+        elTitle.textContent = "HLS — idle";
+        log("initial state: not playing", server);
+    }
+
+    function onSseData(raw) {
+        var payload;
+        try {
+            payload = JSON.parse(raw);
+        } catch (e) {
+            logWarn("SSE: JSON parse error", e);
+            return;
+        }
+        if (!payload.hls) {
+            return;
+        }
+        log("SSE: received overlay push with hls", payload.hls);
+        applyHlsState(payload.hls);
+    }
+
+    if (typeof EventSource !== "undefined") {
+        log("subscribing to /api/stream (SSE) for hls state");
+        es = new EventSource("/api/stream");
+        es.onmessage = function (e) {
+            onSseData(e.data);
+        };
+        es.onerror = function (err) {
+            logWarn("SSE: connection error; browser will retry if possible", err);
+        };
+    } else {
+        logWarn("EventSource not available; HLS can only be controlled by reloading after admin changes");
+    }
+})();
+    </script>
+</body>
+</html>

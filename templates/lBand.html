@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L-Band Ticker Overlay</title>
+    <style>
+        /* Base Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            background-color: transparent; /* Essential for broadcast keying */
+            font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+        }
+
+        /* The L-Band Container (Bottom Bar) */
+        #l-band-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 1920px;
+            height: 100px;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        /* Ticker Wrapper */
+        .ticker-wrapper {
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+        }
+
+        /* The Scrolling Element */
+        #ticker-content {
+            display: inline-block;
+            padding-left: 100%; /* Start off-screen to the right */
+            font-size: 48px; /* Large, readable font */
+            font-weight: 500;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            line-height: 100px; /* Vertically centers text */
+            animation: scroll-ticker var(--duration, 20s) linear infinite;
+        }
+
+        /* Smooth scrolling animation */
+        @keyframes scroll-ticker {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+
+        /* Optional: Accent bar for branding */
+        .accent-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5px;
+            height: 100%;
+            background: #ff0000; /* Red accent common in news */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="l-band-container">
+        <div class="accent-bar"></div>
+        <div class="ticker-wrapper">
+            <div id="ticker-content">
+                <!-- Content injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Dynamic Ticker Logic
+         * Extracts 'ticker_text' from URL parameters.
+         * Example: .../overlay.html?ticker_text=BREAKING NEWS: MAJOR DISCOVERY IN SPACE TECHNOLOGY
+         */
+        function initTicker() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tickerText = urlParams.get('ticker_text');
+            const tickerElement = document.getElementById('ticker-content');
+
+            // Default fallback if no parameter is provided
+            const defaultText = "Waiting for ticker data... Use '?ticker_text=' in URL to update.";
+            
+            // Clean up the text (replace underscores with spaces if needed, or just decode)
+            const content = tickerText ? decodeURIComponent(tickerText) : defaultText;
+            
+            // Set the content
+            // We duplicate the text if it's too short to ensure a continuous loop look
+            tickerElement.textContent = content + "          •          ";
+
+            // Adjust speed based on text length
+            const duration = Math.max(15, content.length / 5);
+            tickerElement.style.setProperty('--duration', `${duration}s`);
+        }
+
+        // Initialize on load
+        window.onload = initTicker;
+
+        // Optional: Listen for URL hash changes or refreshes to update without reload if needed
+        window.addEventListener('hashchange', initTicker);
+    </script>
+</body>
+</html>

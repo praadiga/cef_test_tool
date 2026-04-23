@@ -3,15 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>CEF test tool — routes</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; color: #1a1a1a; line-height: 1.5; }
+        .wrap { max-width: 56rem; margin: 0 auto; padding: 1.5rem; }
+        h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+        .lede { color: #444; font-size: 0.95rem; margin: 0 0 1.5rem; max-width: 50rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid #e4e4e4; }
+        th { font-weight: 600; color: #333; background: #f6f6f6; position: sticky; top: 0; }
+        .path { font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Monaco, Consolas, monospace; font-size: 0.82rem; }
+        .m { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+        .m span { font-size: 0.7rem; padding: 0.1rem 0.35rem; border-radius: 3px; background: #e8eef6; color: #234; }
+        .m span.m-post { background: #e6f0e8; }
+        .m span.m-put, .m span.m-patch, .m span.m-delete { background: #f5ece8; }
+        .doc { color: #333; }
+        .end { font-size: 0.75rem; color: #666; }
+        .open { font-size: 0.8rem; }
+        .open a { color: #0b57c7; }
+        .open a + a { margin-left: 0.5rem; }
+    </style>
 </head>
 <body>
-    <h1>Home</h1>
-    <ul>
-        <h2>Routes Available</h2>
-        {% for route in routes %}
-            <li>{{ route }}</li>
-        {% endfor %}
-    </ul>
+    <div class="wrap">
+        <h1>Routes</h1>
+        <p class="lede">Each line is a registered Flask <strong>URL rule</strong> (same path can appear twice if one handler is GET and another is POST). The <em>description</em> is maintained in <code>ROUTE_DOCS</code> in <code>app.py</code>. “Open (GET)” links use <code>ROUTE_EXAMPLE_KWARGS</code> for paths that need a sample argument.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Methods</th>
+                    <th>URL</th>
+                    <th>Description</th>
+                    <th>Endpoint</th>
+                    <th>Open</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in route_rows %}
+                <tr>
+                    <td>
+                        <div class="m">
+                        {% for method in row.methods %}
+                            <span class="m-{{ method|lower }}">{{ method }}</span>
+                        {% endfor %}
+                        </div>
+                    </td>
+                    <td class="path"><code>{{ row.rule }}</code></td>
+                    <td class="doc">{{ row.doc }}</td>
+                    <td class="end"><code>{{ row.endpoint }}</code></td>
+                    <td class="open">
+                        {% if row.example_url %}
+                            <a href="{{ row.example_url }}">open</a>
+                            {% if row.example_url_qs %}
+                                <a href="{{ row.example_url_qs }}">open (?delay=2)</a>
+                            {% endif %}
+                        {% else %}
+                            <span class="end">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </body>
 </html>

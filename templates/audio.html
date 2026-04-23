@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Audio Test</title>
+
+  <style>
+    /* Full HD canvas */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 1920px;
+      height: 1080px;
+      background-color: #000; /* pure black for max contrast */
+      color: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+      overflow: hidden;
+    }
+
+    /* Center content */
+    .container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Big readable title */
+    .title {
+      font-size: 80px;
+      font-weight: bold;
+      margin-bottom: 40px;
+      text-shadow: 0 0 20px rgba(255,255,255,0.5);
+    }
+
+    /* Status text */
+    .status {
+      font-size: 48px;
+      opacity: 0.9;
+    }
+
+    /* Optional visual indicator */
+    .indicator {
+      margin-top: 60px;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background-color: red;
+      box-shadow: 0 0 30px red;
+    }
+
+    .playing {
+      background-color: lime;
+      box-shadow: 0 0 40px lime;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="title">AUDIO TEST</div>
+    <div class="status" id="status">Initializing...</div>
+    <div class="indicator" id="indicator"></div>
+
+    <audio id="player" autoplay>
+      <source src="/audio" type="audio/mpeg">
+    </audio>
+  </div>
+
+  <script>
+    const audio = document.getElementById("player");
+    const status = document.getElementById("status");
+    const indicator = document.getElementById("indicator");
+
+    function updateUI(text, isPlaying) {
+      status.innerText = text;
+      if (isPlaying) {
+        indicator.classList.add("playing");
+      } else {
+        indicator.classList.remove("playing");
+      }
+    }
+
+    window.addEventListener("load", () => {
+      const playPromise = audio.play();
+
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            updateUI("Audio Playing", true);
+          })
+          .catch(err => {
+            updateUI("Autoplay Blocked", false);
+            console.log(err);
+          });
+      }
+    });
+
+    audio.addEventListener("ended", () => {
+      updateUI("Playback Finished", false);
+    });
+
+    audio.addEventListener("error", () => {
+      updateUI("Audio Error", false);
+    });
+  </script>
+</body>
+</html>

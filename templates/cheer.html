@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cheer</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: system-ui, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+    </style>
+</head>
+<body data-cheer-url="{{ cheer_url }}">
+    <p id="msg">Loaded — cheer plays in 1s…</p>
+    <script>
+        window.addEventListener("load", function () {
+            setTimeout(function () {
+                var src = document.body.getAttribute("data-cheer-url") || "";
+                var a = new Audio(src);
+                var el = document.getElementById("msg");
+                a.play()
+                    .then(function () {
+                        if (el) el.textContent = "Playing cheer.";
+                    })
+                    .catch(function (e) {
+                        if (el) el.textContent = "Playback blocked or failed (see console).";
+                        console.warn(e);
+                    });
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

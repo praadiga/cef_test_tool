@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client stress (CPU + memory + compositing)</title>
+  <style>
+    :root {
+      --n: 64;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, sans-serif;
+      overflow-x: hidden;
+      background: #0a0a12;
+      color: #e8e8f0;
+    }
+    .hud {
+      position: fixed;
+      z-index: 99999;
+      top: 0; left: 0; right: 0;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      border-bottom: 1px solid #333;
+    }
+    .hud button {
+      padding: 6px 12px;
+      cursor: pointer;
+      background: #2a2a3a;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 4px;
+    }
+    .hud button.danger { background: #5a1a1a; border-color: #a44; }
+    .hud kbd { background: #222; padding: 2px 6px; border-radius: 3px; }
+    #layer-root {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .fx-cell {
+      position: absolute;
+      width: 12.5%;
+      height: 12.5%;
+      mix-blend-mode: screen;
+      will-change: transform, filter, opacity;
+    }
+    @keyframes rot {
+      0% { transform: rotate(0deg) scale(1); filter: hue-rotate(0deg) blur(0px); }
+      50% { transform: rotate(180deg) scale(1.15); filter: hue-rotate(180deg) blur(1.2px); }
+      100% { transform: rotate(360deg) scale(1); filter: hue-rotate(360deg) blur(0px); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.15; }
+      50% { opacity: 0.55; }
+    }
+    .gradient-mesh {
+      position: fixed;
+      inset: -20%;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 40%, rgba(120,0,255,0.25), transparent 50%),
+        radial-gradient(ellipse 60% 80% at 80% 60%, rgba(0,200,200,0.2), transparent 55%),
+        radial-gradient(circle at 50% 100%, rgba(255,100,0,0.15), transparent 40%);
+      filter: contrast(1.2) saturate(1.4);
+      animation: mesh-move 8s ease-in-out infinite;
+    }
+    @keyframes mesh-move {
+      0%, 100% { transform: translate(0,0) scale(1); }
+      33% { transform: translate(3%, -2%) scale(1.02); }
+      66% { transform: translate(-2%, 3%) scale(0.99); }
+    }
+    #cv-wrap {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      z-index: 2;
+      opacity: 0.9;
+      border: 1px solid #333;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #cpu-canvas { display: block; vertical-align: top; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <span><strong>Stress page</strong> — heavy client-side CSS compositing + JS (canvas + buffers + optional workers). Server only serves this HTML.</span>
+    <button type="button" id="btn-stop" class="danger">Stop all stress</button>
+    <span id="status">Running…</span>
+    <span id="fps"></span>
+  </div>
+  <div class="gradient-mesh" aria-hidden="true"></div>
+  <div id="layer-root" aria-hidden="true"></div>
+  <div id="cv-wrap">
+    <canvas id="cpu-canvas" width="512" height="512"></canvas>
+  </div>
+
+  <script>
+(function () {
+  'use strict';
+  var running = true;
+  var raf = 0;
+  var workers = [];
+  var arrays = [];
+  var domNodes = [];
+
+  function stop() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    workers.forEach(function (w) {
+      try { w.postMessage({ cmd: 'stop' }); w.terminate(); } catch (e) {}
+    });
+    workers = [];
+    document.getElementById('status').textContent = 'Stopped.';
+  }
+
+  document.getElementById('btn-stop').addEventListener('click', stop);
+
+  // --- Memory: several large ArrayBuffers (tens of MB total in typical browsers) ---
+  var MB = 1024 * 1024;
+  var chunkCount = 6;
+  for (var a = 0; a < chunkCount; a++) {
+    // ~6 × 4MB Float32 = 24MB+ retained on the JS heap
+    var buf = new Float32Array(4 * MB / 4);
+    for (var i = 0; i < buf.length; i += 9973) {
+      buf[i] = Math.sin(i * 0.0001) * Math.cos(i * 0.00007);
+    }
+    arrays.push(buf);
+  }
+
+  // --- CSS: many animated layers (GPU + style recalc + compositing) ---
+  var root = document.getElementById('layer-root');
+  var cols = 8, rows = 8;
+  for (var y = 0; y < rows; y++) {
+    for (var x = 0; x < cols; x++) {
+      var d = document.createElement('div');
+      d.className = 'fx-cell';
+      d.style.left = (x * 12.5) + '%';
+      d.style.top = (y * 12.5) + '%';
+      var h = (x * 17 + y * 23) % 360;
+      d.style.background = 'linear-gradient(' + h + 'deg, rgba(255,60,120,0.12), rgba(40,200,255,0.1))';
+      d.style.animation = 'rot ' + (4 + (x + y) % 5) + 's linear infinite, pulse 3s ease-in-out infinite';
+      d.style.animationDelay = (x * 0.07 + y * 0.11) + 's';
+      root.appendChild(d);
+      domNodes.push(d);
+    }
+  }
+
+  // --- Canvas: per-frame read/modify pixels + sin/cos (CPU) ---
+  var c = document.getElementById('cpu-canvas');
+  var ctx = c.getContext('2d', { willReadFrequently: true });
+  var w = c.width, h = c.height;
+  var imageData = ctx.createImageData(w, h);
+  var data = imageData.data;
+  var t0 = performance.now();
+  var frames = 0;
+  var lastFps = t0;
+
+  function frame(now) {
+    if (!running) return;
+    var t = now * 0.001;
+    var base = (arrays[0][(frames * 3) % arrays[0].length] || 0) * 0.01;
+    for (var py = 0; py < h; py += 2) {
+      for (var px = 0; px < w; px += 2) {
+        var i = (py * w + px) * 4;
+        var n = Math.sin(px * 0.02 + t) * Math.cos(py * 0.02 - t) + base;
+        var v = (n * 0.5 + 0.5) * 255;
+        data[i] = (v * 0.6) & 255;
+        data[i + 1] = (v * 0.4 + px * 0.1) & 255;
+        data[i + 2] = (v * 0.8 + py * 0.08) & 255;
+        data[i + 3] = 220;
+        // block write neighbors ( denser work )
+        if (px + 1 < w) {
+          var j = i + 4;
+          data[j] = data[i];
+          data[j + 1] = data[i + 1] ^ 3;
+          data[j + 2] = data[i + 2] ^ 5;
+        }
+        if (py + 1 < h) {
+          var j2 = ((py + 1) * w + px) * 4;
+          data[j2] = (data[i] + data[i + 1]) >> 1;
+          data[j2 + 1] = (data[i + 1] + data[i + 2]) >> 1;
+        }
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    frames++;
+    if (now - lastFps >= 1000) {
+      var fps = frames / ((now - lastFps) / 1000);
+      document.getElementById('fps').textContent = 'Canvas ~' + fps.toFixed(0) + ' fps';
+      frames = 0;
+      lastFps = now;
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  raf = requestAnimationFrame(frame);
+
+  // --- Web Workers: tight numeric loops (extra CPU off main thread; tunable) ---
+  var workerCount = 3;
+  var workerCode = function () {
+    var on = true;
+    self.onmessage = function (e) {
+      if (e.data && e.data.cmd === 'stop') on = false;
+    };
+    var x = 1.000001;
+    while (on) {
+      for (var k = 0; k < 5000; k++) {
+        x = Math.sqrt(x) * 1.0000001 + Math.sin(x) * 0.0001;
+      }
+    }
+  };
+  var blob = new Blob(['(' + workerCode.toString() + ')()'], { type: 'application/javascript' });
+  var wurl = URL.createObjectURL(blob);
+  for (var wi = 0; wi < workerCount; wi++) {
+    try {
+      var ww = new Worker(wurl);
+      workers.push(ww);
+    } catch (err) {
+      /* Workers may be blocked in some embeds; ignore */
+    }
+  }
+  if (workerCount && workers.length === 0) {
+    // Fallback: extra main-thread spin (worse for UI, but still loads CPU if workers unavailable)
+    var spin = 0.0;
+    setInterval(function () {
+      if (!running) return;
+      for (var s = 0; s < 20000; s++) spin += Math.sqrt(s % 1000) * 0.00001;
+    }, 0);
+  }
+})();
+  </script>
+</body>
+</html>

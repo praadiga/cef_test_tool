@@ -29,6 +29,22 @@
             </section>
 
             <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HLS <code class="text-sm font-mono">/video_hls</code></h2>
+                <p class="text-sm text-slate-600">HLS (M3U8) is played on the full-page <code class="bg-slate-100 px-1 rounded">/video_hls</code> page. The player listens to the same <code class="bg-slate-100 px-1 rounded">/api/stream</code> (SSE) feed and reloads or stops when you change this state. Server also logs to stdout with the prefix <code class="bg-slate-100 px-1 rounded">[hls api]</code>.</p>
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium">HLS master / playlist URL
+                        <input type="url" id="hls_url" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-mono" placeholder="https://…/master.m3u8" autocomplete="off" />
+                    </label>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button type="button" id="btn-hls-set-url" class="px-3 py-2 rounded bg-slate-700 text-white text-sm">Set HLS URL</button>
+                    <button type="button" id="btn-hls-start" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm">Start HLS</button>
+                    <button type="button" id="btn-hls-stop" class="px-3 py-2 rounded bg-rose-600 text-white text-sm">Stop HLS</button>
+                </div>
+                <p id="hls-admin-hint" class="text-xs text-slate-500" aria-live="polite"></p>
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HTTP /main test</h2>
                 <p class="text-sm text-slate-600">Which response <code class="bg-slate-100 px-1 rounded">/main</code> returns (graphics only on 200).</p>
                 <div class="flex flex-wrap gap-2">
@@ -198,6 +214,17 @@
 
             const balls = Array.isArray(s.recent_balls) ? s.recent_balls.join(',') : '';
             set('recent_balls', balls);
+
+            const hl = s.hls;
+            const hlsHint = document.getElementById('hls-admin-hint');
+            if (hl && typeof hl === 'object') {
+                set('hls_url', hl.url != null ? hl.url : '');
+                if (hlsHint) {
+                    hlsHint.textContent = 'HLS: ' + (hl.enabled ? 'playing' : 'stopped') + ' — seq ' + (hl.seq != null ? hl.seq : '—');
+                }
+            } else if (hlsHint) {
+                hlsHint.textContent = '';
+            }
         }
 
         function collectPayload() {
@@ -317,6 +344,59 @@
                 msg('Could not load state: ' + (e.message || e), false);
             }
         }
+
+        const HLS_PREFIX = '[admin hls]';
+
+        async function postHls(payload) {
+            const hint = document.getElementById('hls-admin-hint');
+            console.log(HLS_PREFIX, 'POST /api/hls', payload);
+            try {
+                const res = await fetch('/api/hls', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const text = await res.text();
+                if (!res.ok) {
+                    console.error(HLS_PREFIX, 'POST /api/hls failed', res.status, text);
+                    if (hint) hint.textContent = 'HLS error: HTTP ' + res.status;
+                    return;
+                }
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error(HLS_PREFIX, 'response not JSON', text);
+                    if (hint) hint.textContent = 'HLS: invalid response';
+                    return;
+                }
+                console.log(HLS_PREFIX, 'POST /api/hls OK', data);
+                if (hint && data) {
+                    hint.textContent = 'HLS: ' + (data.enabled ? 'playing' : 'stopped') + ' — seq ' + (data.seq != null ? data.seq : '—');
+                }
+                msg('HLS updated (seq ' + (data && data.seq != null ? data.seq : '?') + ').', true);
+            } catch (e) {
+                console.error(HLS_PREFIX, e);
+                if (hint) hint.textContent = 'HLS: request failed';
+                msg('HLS request failed: ' + (e.message || e), false);
+            }
+        }
+
+        document.getElementById('btn-hls-set-url').addEventListener('click', () => {
+            const u = document.getElementById('hls_url').value.trim();
+            if (!u) {
+                console.warn(HLS_PREFIX, 'Set HLS URL: empty input, ignoring');
+                msg('Enter an HLS URL first.', false);
+                return;
+            }
+            postHls({ url: u });
+        });
+        document.getElementById('btn-hls-start').addEventListener('click', () => {
+            postHls({ enabled: true });
+        });
+        document.getElementById('btn-hls-stop').addEventListener('click', () => {
+            postHls({ enabled: false });
+        });
 
         loadState();
     </script>
