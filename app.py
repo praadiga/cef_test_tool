@@ -1,15 +1,19 @@
 import copy
+import functools
+import hmac
 import json
 import os
 import queue
 import threading
 import time
-from flask import Flask, render_template, request, abort, jsonify, Response, stream_with_context, redirect, url_for
+from flask import Flask, render_template, request, abort, jsonify, Response, stream_with_context, redirect, url_for, session
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "cef-test-tool-dev-session-key")
 
 _state_lock = threading.RLock()
 _sse_clients = []
+ADMIN_ACCESS_KEY = os.environ.get("ADMIN_ACCESS_KEY", "amagi123")
 
 DEFAULT_OVERLAY = {
     "main_status": 200,
@@ -93,6 +97,28 @@ def notify_sse_subscribers() -> None:
             pass
 
 
+def is_admin_authenticated() -> bool:
+    return session.get("admin_authenticated") is True
+
+
+def require_admin(view_func):
+    @functools.wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if is_admin_authenticated():
+            return view_func(*args, **kwargs)
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "admin key required"}), 401
+        return redirect(url_for("admin", next=request.full_path if request.query_string else request.path))
+
+    return wrapper
+
+
+def safe_local_next(next_url):
+    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return next_url
+    return url_for("admin")
+
+
 # Shown on /. Update when you add a route (key = view function / endpoint name).
 ROUTE_DOCS = {
     "static": "Serves files under the static/ folder (CSS, JS, output2.mp4, sounds, etc.).",
@@ -102,14 +128,15 @@ ROUTE_DOCS = {
     "lBand": "Template page: lBand.html (layout / band UI test).",
     "main_graphics": "Default “graphics” overlay; HTTP status is controlled from /admin (200 vs 4xx/5xx) via overlay state.",
     "get_overlay": "JSON snapshot of the full app state (overlay, sound, hls, etc.) used by the admin and clients.",
-    "post_overlay": "Merges JSON into app state, bumps SSE, and returns the new snapshot (admin “Apply to overlay”).",
+    "post_overlay": "Admin-only: merges JSON into app state, bumps SSE, and returns the new snapshot (“Apply to overlay”).",
     "get_hls": "JSON for current HLS settings (enabled, url, seq) for /video_hls, /video_hls2, and /admin.",
-    "post_hls": "Set HLS enabled URL and/or URL; increases seq; notifies all /api/stream subscribers.",
+    "post_hls": "Admin-only: set HLS enabled URL and/or URL; increases seq; notifies all /api/stream subscribers.",
     "hls_client_error": "Browser POSTs a plain-text error (e.g. hls.js failure) so the server log can mirror the client error.",
-    "post_sound": "Queues a sound clip id; /main overlay consumes it over SSE to play a cue.",
+    "post_sound": "Admin-only: queues a sound clip id; /main overlay consumes it over SSE to play a cue.",
     "redirect_route": "HTTP redirect to a fixed external Amplify URL (redirect behavior test).",
     "sse_stream": "Server-Sent Events stream: sends full JSON state on connect and on every update (pings to keep connections alive).",
-    "admin": "Admin UI: edit overlay, play sounds, and control /main, HLS settings (POSTs to the APIs above).",
+    "admin": "Admin UI: enter the admin key, then edit overlay, play sounds, and control /main / HLS settings.",
+    "admin_logout": "Clears the current admin session and returns to the admin key prompt.",
     "display": "Full-page background MP4 from /static/output2.mp4 (like a simple “live” dashboard).",
     "display_hls": "HLS (M3U8) full-page player; start/stop and URL from /admin; updates live over the same SSE stream.",
     "display_hls2": "Same look as /video, but when HLS is enabled in admin, plays the configured M3U8; else falls back to output2.mp4. Reports client errors to the server on failure.",
@@ -129,6 +156,7 @@ ROUTE_EXAMPLE_KWARGS = {
     "get_hls": {},
     "lBand": {},
     "admin": {},
+    "admin_logout": {},
     "display": {},
     "display_hls": {},
     "display_hls2": {},
@@ -173,6 +201,7 @@ def get_overlay():
 
 
 @app.route("/api/overlay", methods=["POST"])
+@require_admin
 def post_overlay():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -199,6 +228,7 @@ def get_hls():
 
 
 @app.route("/api/hls", methods=["POST"])
+@require_admin
 def post_hls():
     """Set `enabled` and/or `url`; bumps `seq` and notifies /api/stream subscribers."""
     data = request.get_json(silent=True)
@@ -249,6 +279,7 @@ def hls_client_error():
 
 
 @app.route("/api/sound", methods=["POST"])
+@require_admin
 def post_sound():
     """Bump sound seq and push over SSE so /main (graphics) can play a cue."""
     data = request.get_json(silent=True)
@@ -304,10 +335,26 @@ def sse_stream():
     )
 
 
-# Admin — load shell; client fills fields via GET /api/overlay
-@app.route("/admin", methods=["GET"])
+# Admin — key prompt first; client fills fields via GET /api/overlay after login.
+@app.route("/admin", methods=["GET", "POST"])
 def admin():
+    error = None
+    if request.method == "POST":
+        submitted_key = request.form.get("secret_key", "")
+        if hmac.compare_digest(submitted_key, ADMIN_ACCESS_KEY):
+            session["admin_authenticated"] = True
+            return redirect(safe_local_next(request.form.get("next")))
+        error = "Invalid secret key."
+    if not is_admin_authenticated():
+        next_url = safe_local_next(request.args.get("next"))
+        return render_template("admin_login.html", error=error, next_url=next_url)
     return render_template("admin.html")
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("admin_authenticated", None)
+    return redirect(url_for("admin"))
 
 @app.route("/video")
 def display():

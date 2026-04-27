@@ -8,9 +8,12 @@
 </head>
 <body class="bg-slate-100 text-slate-900 min-h-screen p-6">
     <div class="max-w-3xl mx-auto space-y-8">
-        <header>
-            <h1 class="text-2xl font-bold">CEF Tool — Overlay control</h1>
-            <p class="text-slate-600 text-sm mt-1">Changes apply to the live overlay over SSE. Use <strong>Apply to overlay</strong> to save.</p>
+        <header class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h1 class="text-2xl font-bold">CEF Tool — Overlay control</h1>
+                <p class="text-slate-600 text-sm mt-1">Changes apply to the live overlay over SSE. Use <strong>Apply to overlay</strong> to save.</p>
+            </div>
+            <a href="{{ url_for('admin_logout') }}" class="text-sm text-slate-600 hover:text-slate-900 underline">Logout</a>
         </header>
 
         <p id="status-msg" class="text-sm text-slate-500 hidden" aria-live="polite"></p>
