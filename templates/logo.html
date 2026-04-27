@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1980, height=1800, initial-scale=1.0">
+    <title>Transparent Logo Overlay</title>
+    <style>
+        html,
+        body {
+            width: 1980px;
+            height: 1800px;
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            overflow: hidden;
+        }
+
+        .stage {
+            position: relative;
+            width: 1980px;
+            height: 1800px;
+            background: transparent;
+        }
+
+        .logo {
+            position: absolute;
+            top: 44px;
+            right: 54px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 22px;
+            color: #fff;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(37, 99, 235, 0.82));
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.35);
+            animation: logoFloat 2.4s ease-in-out infinite;
+        }
+
+        .logo-mark {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background:
+                radial-gradient(circle at 35% 35%, #ffffff 0 10%, transparent 11%),
+                conic-gradient(from 25deg, #60a5fa, #22c55e, #facc15, #f97316, #60a5fa);
+            animation: logoSpin 3.2s linear infinite;
+        }
+
+        @keyframes logoFloat {
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+                opacity: 0.92;
+            }
+            50% {
+                transform: translateY(10px) scale(1.03);
+                opacity: 1;
+            }
+        }
+
+        @keyframes logoSpin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="stage" aria-label="Transparent logo overlay">
+        <div class="logo">
+            <span class="logo-mark" aria-hidden="true"></span>
+            <span>Amagi</span>
+        </div>
+    </div>
+</body>
+</html>

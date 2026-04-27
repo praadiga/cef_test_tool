@@ -59,6 +59,16 @@
                 <input type="hidden" id="main_status" value="200" />
             </section>
 
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HTTP /logo test</h2>
+                <p class="text-sm text-slate-600">Which response <code class="bg-slate-100 px-1 rounded">/logo</code> returns. On 200 it shows a transparent 1980x1800 page with the animated logo at the top right.</p>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="px-3 py-2 rounded bg-slate-800 text-white text-sm logo-status-btn" data-status="200">200 OK</button>
+                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm logo-status-btn" data-status="500">500</button>
+                </div>
+                <input type="hidden" id="logo_status" value="200" />
+            </section>
+
             <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Match &amp; top bar</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -180,6 +190,13 @@
                 b.classList.toggle('text-white', on);
                 b.classList.toggle('bg-slate-200', !on);
             });
+            document.getElementById('logo_status').value = String(s.logo_status != null ? s.logo_status : 200);
+            document.querySelectorAll('.logo-status-btn').forEach((b) => {
+                const on = String(b.dataset.status) === String(document.getElementById('logo_status').value);
+                b.classList.toggle('bg-slate-800', on);
+                b.classList.toggle('text-white', on);
+                b.classList.toggle('bg-slate-200', !on);
+            });
 
             const set = (id, v) => {
                 const n = document.getElementById(id);
@@ -240,6 +257,7 @@
             const pa = parseInt(document.getElementById('prob_aus_pct').value, 10);
             return {
                 main_status: parseInt(document.getElementById('main_status').value, 10) || 200,
+                logo_status: parseInt(document.getElementById('logo_status').value, 10) || 200,
                 series_title: document.getElementById('series_title').value,
                 viewer_count: document.getElementById('viewer_count').value,
                 team: document.getElementById('team').value,
@@ -276,6 +294,19 @@
             btn.addEventListener('click', () => {
                 document.getElementById('main_status').value = btn.dataset.status;
                 document.querySelectorAll('.main-status-btn').forEach((b) => {
+                    const on = b === btn;
+                    b.classList.toggle('bg-slate-800', on);
+                    b.classList.toggle('text-white', on);
+                    b.classList.toggle('bg-slate-200', !on);
+                });
+                applyOverlay();
+            });
+        });
+
+        document.querySelectorAll('.logo-status-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                document.getElementById('logo_status').value = btn.dataset.status;
+                document.querySelectorAll('.logo-status-btn').forEach((b) => {
                     const on = b === btn;
                     b.classList.toggle('bg-slate-800', on);
                     b.classList.toggle('text-white', on);

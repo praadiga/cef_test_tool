@@ -17,6 +17,7 @@ ADMIN_ACCESS_KEY = os.environ.get("ADMIN_ACCESS_KEY", "amagi123")
 
 DEFAULT_OVERLAY = {
     "main_status": 200,
+    "logo_status": 200,
     "team": "INDIA",
     "score": "184/4",
     "overs": "18.4",
@@ -127,6 +128,7 @@ ROUTE_DOCS = {
     "return_delay": "Waits N seconds, then returns graphics HTML. Used to test slow / delayed HTTP responses.",
     "lBand": "Template page: lBand.html (layout / band UI test).",
     "main_graphics": "Default “graphics” overlay; HTTP status is controlled from /admin (200 vs 4xx/5xx) via overlay state.",
+    "logo_overlay": "Transparent 1980x1800 logo overlay; HTTP status is controlled from /admin (200 or 500).",
     "get_overlay": "JSON snapshot of the full app state (overlay, sound, hls, etc.) used by the admin and clients.",
     "post_overlay": "Admin-only: merges JSON into app state, bumps SSE, and returns the new snapshot (“Apply to overlay”).",
     "get_hls": "JSON for current HLS settings (enabled, url, seq) for /video_hls, /video_hls2, and /admin.",
@@ -152,6 +154,7 @@ ROUTE_EXAMPLE_KWARGS = {
     "return_error": {"code": 404},
     "return_delay": {"seconds": 2},
     "main_graphics": {},
+    "logo_overlay": {},
     "get_overlay": {},
     "get_hls": {},
     "lBand": {},
@@ -193,6 +196,14 @@ def main_graphics():
         return render_template("graphics.html")
     else:
         abort(status)
+
+
+@app.route("/logo")
+def logo_overlay():
+    status = app_state["logo_status"]
+    if status == 200:
+        return render_template("logo.html")
+    abort(status)
 
 
 @app.route("/api/overlay", methods=["GET"])
