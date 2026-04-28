@@ -69,7 +69,23 @@
                 <input type="hidden" id="logo_status" value="200" />
             </section>
 
-            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HTTP /lBand test</h2>
+                <p class="text-sm text-slate-600">Which response <code class="bg-slate-100 px-1 rounded">/lBand</code> returns.</p>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="px-3 py-2 rounded bg-slate-800 text-white text-sm lband-status-btn" data-status="200">200 OK</button>
+                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm lband-status-btn" data-status="500">500</button>
+                </div>
+                <input type="hidden" id="lband_status" value="200" />
+            </section>
+
+            <details class="bg-white rounded-lg border border-slate-200 shadow-sm">
+                <summary class="cursor-pointer select-none p-5 text-lg font-semibold">
+                    Match overlay fields
+                    <span class="block text-sm font-normal text-slate-600 mt-1">Score, batters, bowler, ticker, and recent balls.</span>
+                </summary>
+                <div class="px-5 pb-5 space-y-3">
+            <section class="rounded-lg border border-slate-200 p-5 space-y-3">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Match &amp; top bar</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label class="block text-sm font-medium">Series title
@@ -99,7 +115,7 @@
                 </div>
             </section>
 
-            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+            <section class="rounded-lg border border-slate-200 p-5 space-y-3">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Batting — striker</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label class="block text-sm font-medium sm:col-span-2">Name
@@ -117,7 +133,7 @@
                 </div>
             </section>
 
-            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+            <section class="rounded-lg border border-slate-200 p-5 space-y-3">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Non-striker</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <label class="block text-sm font-medium">Name
@@ -132,7 +148,7 @@
                 </div>
             </section>
 
-            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+            <section class="rounded-lg border border-slate-200 p-5 space-y-3">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Bowler</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <label class="block text-sm font-medium">Name
@@ -147,7 +163,7 @@
                 </div>
             </section>
 
-            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+            <section class="rounded-lg border border-slate-200 p-5 space-y-3">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Breaking news ticker</h2>
                 <label class="flex items-center gap-2 text-sm font-medium">
                     <input type="checkbox" id="breaking_enabled" class="rounded border-slate-300" />
@@ -158,12 +174,14 @@
                 </label>
             </section>
 
-            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
+            <section class="rounded-lg border border-slate-200 p-5 space-y-3">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Recent balls</h2>
                 <label class="block text-sm font-medium">Comma-separated (e.g. 1,4,wd,6,0)
                     <input type="text" id="recent_balls" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-mono" />
                 </label>
             </section>
+                </div>
+            </details>
 
             <div class="flex flex-wrap items-center gap-3">
                 <button type="button" id="btn-apply" class="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">
@@ -193,6 +211,13 @@
             document.getElementById('logo_status').value = String(s.logo_status != null ? s.logo_status : 200);
             document.querySelectorAll('.logo-status-btn').forEach((b) => {
                 const on = String(b.dataset.status) === String(document.getElementById('logo_status').value);
+                b.classList.toggle('bg-slate-800', on);
+                b.classList.toggle('text-white', on);
+                b.classList.toggle('bg-slate-200', !on);
+            });
+            document.getElementById('lband_status').value = String(s.lband_status != null ? s.lband_status : 200);
+            document.querySelectorAll('.lband-status-btn').forEach((b) => {
+                const on = String(b.dataset.status) === String(document.getElementById('lband_status').value);
                 b.classList.toggle('bg-slate-800', on);
                 b.classList.toggle('text-white', on);
                 b.classList.toggle('bg-slate-200', !on);
@@ -258,6 +283,7 @@
             return {
                 main_status: parseInt(document.getElementById('main_status').value, 10) || 200,
                 logo_status: parseInt(document.getElementById('logo_status').value, 10) || 200,
+                lband_status: parseInt(document.getElementById('lband_status').value, 10) || 200,
                 series_title: document.getElementById('series_title').value,
                 viewer_count: document.getElementById('viewer_count').value,
                 team: document.getElementById('team').value,
@@ -307,6 +333,19 @@
             btn.addEventListener('click', () => {
                 document.getElementById('logo_status').value = btn.dataset.status;
                 document.querySelectorAll('.logo-status-btn').forEach((b) => {
+                    const on = b === btn;
+                    b.classList.toggle('bg-slate-800', on);
+                    b.classList.toggle('text-white', on);
+                    b.classList.toggle('bg-slate-200', !on);
+                });
+                applyOverlay();
+            });
+        });
+
+        document.querySelectorAll('.lband-status-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                document.getElementById('lband_status').value = btn.dataset.status;
+                document.querySelectorAll('.lband-status-btn').forEach((b) => {
                     const on = b === btn;
                     b.classList.toggle('bg-slate-800', on);
                     b.classList.toggle('text-white', on);

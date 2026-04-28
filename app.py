@@ -18,6 +18,7 @@ ADMIN_ACCESS_KEY = os.environ.get("ADMIN_ACCESS_KEY", "amagi123")
 DEFAULT_OVERLAY = {
     "main_status": 200,
     "logo_status": 200,
+    "lband_status": 200,
     "team": "INDIA",
     "score": "184/4",
     "overs": "18.4",
@@ -126,7 +127,7 @@ ROUTE_DOCS = {
     "home": "This index: all routes, methods, and short descriptions.",
     "return_error": "Renders an error page with a given HTTP status (e.g. 404, 500) for CEF error handling tests.",
     "return_delay": "Waits N seconds, then returns graphics HTML. Used to test slow / delayed HTTP responses.",
-    "lBand": "Template page: lBand.html (layout / band UI test).",
+    "lBand": "Template page: lBand.html (layout / band UI test); HTTP status is controlled from /admin (200 or 500).",
     "main_graphics": "Default “graphics” overlay; HTTP status is controlled from /admin (200 vs 4xx/5xx) via overlay state.",
     "logo_overlay": "Transparent 1980x1800 logo overlay; HTTP status is controlled from /admin (200 or 500).",
     "get_overlay": "JSON snapshot of the full app state (overlay, sound, hls, etc.) used by the admin and clients.",
@@ -186,7 +187,10 @@ def return_delay(seconds):
 
 @app.route("/lBand")
 def lBand():
-    return render_template("lBand.html")
+    status = app_state["lband_status"]
+    if status == 200:
+        return render_template("lBand.html")
+    abort(status)
 
 # 3. Controlled Main Endpoint
 @app.route("/main")
