@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Audio Test</title>
+  <title>Audio Status Test</title>
 
   <style>
     /* Full HD canvas */
@@ -11,10 +11,22 @@
       padding: 0;
       width: 1920px;
       height: 1080px;
-      background-color: #000; /* pure black for max contrast */
+      /* Default background is a neutral dark gray */
+      background-color: #1a1a1a; 
       color: #fff;
       font-family: Arial, Helvetica, sans-serif;
       overflow: hidden;
+      /* Smooth transition for background color changes */
+      transition: background-color 0.6s ease;
+    }
+
+    /* Background State Classes */
+    body.state-playing {
+      background-color: #064e3b; /* Deep Emerald Green */
+    }
+
+    body.state-blocked {
+      background-color: #7f1d1d; /* Deep Crimson Red */
     }
 
     /* Center content */
@@ -25,85 +37,112 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
+      z-index: 2;
+      position: relative;
     }
 
     /* Big readable title */
     .title {
       font-size: 80px;
       font-weight: bold;
-      margin-bottom: 40px;
-      text-shadow: 0 0 20px rgba(255,255,255,0.5);
+      margin-bottom: 20px;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.5);
     }
 
     /* Status text */
     .status {
-      font-size: 48px;
-      opacity: 0.9;
+      font-size: 54px;
+      font-weight: 300;
+      text-transform: uppercase;
+      letter-spacing: 2px;
     }
 
-    /* Optional visual indicator */
+    /* Center Indicator Circle */
     .indicator {
       margin-top: 60px;
-      width: 100px;
-      height: 100px;
+      width: 120px;
+      height: 120px;
       border-radius: 50%;
-      background-color: red;
-      box-shadow: 0 0 30px red;
+      background-color: #333;
+      border: 4px solid rgba(255,255,255,0.2);
+      transition: all 0.4s ease;
     }
 
-    .playing {
-      background-color: lime;
-      box-shadow: 0 0 40px lime;
+    .playing-indicator {
+      background-color: #10b981;
+      box-shadow: 0 0 50px #10b981;
+      transform: scale(1.1);
+    }
+
+    .blocked-indicator {
+      background-color: #ef4444;
+      box-shadow: 0 0 50px #ef4444;
     }
   </style>
 </head>
 
 <body>
   <div class="container">
-    <div class="title">AUDIO TEST</div>
+    <div class="title">AUDIO DIAGNOSTIC</div>
     <div class="status" id="status">Initializing...</div>
     <div class="indicator" id="indicator"></div>
 
     <audio id="player" autoplay>
-      <source src="/audio" type="audio/mpeg">
+      <source src="{{ audio_url }}" type="audio/mpeg">
     </audio>
   </div>
 
   <script>
     const audio = document.getElementById("player");
-    const status = document.getElementById("status");
+    const statusText = document.getElementById("status");
     const indicator = document.getElementById("indicator");
+    const body = document.body;
 
-    function updateUI(text, isPlaying) {
-      status.innerText = text;
-      if (isPlaying) {
-        indicator.classList.add("playing");
-      } else {
-        indicator.classList.remove("playing");
+    /**
+     * Updates the UI Theme
+     * @param {string} text - The message to display
+     * @param {string} state - 'playing', 'blocked', or 'reset'
+     */
+    function setUIState(text, state) {
+      statusText.innerText = text;
+      
+      // Remove all state classes first
+      body.classList.remove("state-playing", "state-blocked");
+      indicator.classList.remove("playing-indicator", "blocked-indicator");
+
+      if (state === "playing") {
+        body.classList.add("state-playing");
+        indicator.classList.add("playing-indicator");
+      } else if (state === "blocked") {
+        body.classList.add("state-blocked");
+        indicator.classList.add("blocked-indicator");
       }
     }
 
+    // Attempt autoplay on load
     window.addEventListener("load", () => {
       const playPromise = audio.play();
 
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            updateUI("Audio Playing", true);
+            setUIState("Audio Playing", "playing");
           })
           .catch(err => {
-            updateUI("Autoplay Blocked", false);
-            console.log(err);
+            setUIState("Autoplay Blocked", "blocked");
+            console.warn("Autoplay was prevented by the browser. Interaction required.", err);
           });
       }
     });
 
+    // Handle audio completion
     audio.addEventListener("ended", () => {
-      updateUI("Playback Finished", false);
+      setUIState("Playback Finished", "reset");
     });
 
+    // Handle source errors (file not found, etc)
     audio.addEventListener("error", () => {
-      updateUI("Audio Error", false);
+      setUIState("Audio Source Error", "blocked");
     });
   </script>
 </body>

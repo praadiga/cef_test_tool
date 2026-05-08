@@ -145,7 +145,7 @@ ROUTE_DOCS = {
     "display_hls2": "Same look as /video, but when HLS is enabled in admin, plays the configured M3U8; else falls back to output2.mp4. Reports client errors to the server on failure.",
     "cheer_sound": "Plays a bundled cheer MP3 shortly after load (sounds/ test).",
     "stress_client": "Heavy in-browser CSS/JS (canvas, workers) to stress CEF (CPU/memory/compositing).",
-    "audio": "302 redirect to an external SoundCloud page (link / media test).",
+    "audio": "Renders audio.html and attempts to autoplay static/sounds/audio.mp3.",
     "fail_midway": "Streams partial HTML, waits, then aborts the body (mid-stream failure; optional ?delay= and ?http_status=).",
 }
 
@@ -418,7 +418,10 @@ def stress_client():
 
 @app.route("/audio")
 def audio():
-    return redirect("https://soundcloud.com/platform/sama")
+    return render_template(
+        "audio.html",
+        audio_url=url_for("static", filename="sounds/audio.mp3"),
+    )
 
 @app.route("/fail-midway")
 def fail_midway():
