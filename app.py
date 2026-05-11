@@ -54,6 +54,11 @@ DEFAULT_OVERLAY = {
     },
     "recent_balls": ["1", "4", "wd", "6", "1", "0", "4"],
     "sound": {"seq": 0, "clip": None},
+    "console_log": {
+        "enabled": False,
+        "level": "any",
+        "count_per_10s": 10,
+    },
     # Controls /video_hls: toggled from admin via POST /api/hls, pushed on /api/stream (SSE)
     "hls": {
         "enabled": True,
@@ -138,6 +143,7 @@ ROUTE_DOCS = {
     "post_sound": "Admin-only: queues a sound clip id; /main overlay consumes it over SSE to play a cue.",
     "redirect_route": "HTTP redirect to a fixed external Amplify URL (redirect behavior test).",
     "sse_stream": "Server-Sent Events stream: sends full JSON state on connect and on every update (pings to keep connections alive).",
+    "console_log_page": "Console log generator: emits INFO, ERROR, WARN, FATAL, VERBOSE, or random logs using admin settings.",
     "admin": "Admin UI: enter the admin key, then edit overlay, play sounds, and control /main / HLS settings.",
     "admin_logout": "Clears the current admin session and returns to the admin key prompt.",
     "display": "Full-page background MP4 from /static/output2.mp4 (like a simple “live” dashboard).",
@@ -168,6 +174,7 @@ ROUTE_EXAMPLE_KWARGS = {
     "stress_client": {},
     "redirect_route": {},
     "audio": {},
+    "console_log_page": {},
     "fail_midway": {},
     "sse_stream": {},
     "home": {},
@@ -422,6 +429,12 @@ def audio():
         "audio.html",
         audio_url=url_for("static", filename="sounds/audio.mp3"),
     )
+
+
+@app.route("/console-log")
+def console_log_page():
+    return render_template("console_log.html")
+
 
 @app.route("/fail-midway")
 def fail_midway():

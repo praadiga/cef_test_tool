@@ -79,6 +79,31 @@
                 <input type="hidden" id="lband_status" value="200" />
             </section>
 
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Console log generator <code class="text-sm font-mono">/console-log</code></h2>
+                <p class="text-sm text-slate-600">Controls how many browser console messages the <code class="bg-slate-100 px-1 rounded">/console-log</code> page emits every 10 seconds.</p>
+                <label class="flex items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" id="console_log_enabled" class="rounded border-slate-300" />
+                    Enable console logging
+                </label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="block text-sm font-medium">Log type
+                        <select id="console_log_level" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+                            <option value="any">Any type</option>
+                            <option value="INFO">INFO</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="WARN">WARN</option>
+                            <option value="FATAL">FATAL</option>
+                            <option value="VERBOSE">VERBOSE</option>
+                        </select>
+                    </label>
+                    <label class="block text-sm font-medium">Logs per 10 seconds
+                        <input type="number" id="console_log_count" min="0" step="1" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                </div>
+                <p id="console-log-admin-hint" class="text-xs text-slate-500" aria-live="polite"></p>
+            </section>
+
             <details class="bg-white rounded-lg border border-slate-200 shadow-sm">
                 <summary class="cursor-pointer select-none p-5 text-lg font-semibold">
                     Match overlay fields
@@ -222,6 +247,15 @@
                 b.classList.toggle('text-white', on);
                 b.classList.toggle('bg-slate-200', !on);
             });
+            const consoleLog = s.console_log || {};
+            const consoleEnabled = document.getElementById('console_log_enabled');
+            const consoleLevel = document.getElementById('console_log_level');
+            const consoleCount = document.getElementById('console_log_count');
+            const consoleHint = document.getElementById('console-log-admin-hint');
+            consoleEnabled.checked = !!consoleLog.enabled;
+            consoleLevel.value = consoleLog.level || 'any';
+            consoleCount.value = String(consoleLog.count_per_10s != null ? consoleLog.count_per_10s : 10);
+            consoleHint.textContent = 'Console logging: ' + (consoleEnabled.checked ? 'enabled' : 'disabled') + ', type ' + consoleLevel.value + ', ' + consoleCount.value + ' per 10s';
 
             const set = (id, v) => {
                 const n = document.getElementById(id);
@@ -280,10 +314,16 @@
 
             const pi = parseInt(document.getElementById('prob_ind_pct').value, 10);
             const pa = parseInt(document.getElementById('prob_aus_pct').value, 10);
+            const consoleCount = parseInt(document.getElementById('console_log_count').value, 10);
             return {
                 main_status: parseInt(document.getElementById('main_status').value, 10) || 200,
                 logo_status: parseInt(document.getElementById('logo_status').value, 10) || 200,
                 lband_status: parseInt(document.getElementById('lband_status').value, 10) || 200,
+                console_log: {
+                    enabled: document.getElementById('console_log_enabled').checked,
+                    level: document.getElementById('console_log_level').value || 'any',
+                    count_per_10s: Number.isFinite(consoleCount) && consoleCount > 0 ? consoleCount : 0,
+                },
                 series_title: document.getElementById('series_title').value,
                 viewer_count: document.getElementById('viewer_count').value,
                 team: document.getElementById('team').value,

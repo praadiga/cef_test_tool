@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEF Tool — Console Log Generator</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            background: #020617;
+            color: #e2e8f0;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+        body {
+            padding: 32px;
+        }
+        .wrap {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+        h1 {
+            margin: 0 0 8px;
+            font-size: 34px;
+        }
+        .lede {
+            margin: 0 0 24px;
+            color: #94a3b8;
+        }
+        .panel {
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 16px;
+            background: rgba(15, 23, 42, 0.86);
+            padding: 22px;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .metric {
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 12px;
+            padding: 16px;
+            background: rgba(30, 41, 59, 0.65);
+        }
+        .label {
+            color: #94a3b8;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .value {
+            margin-top: 8px;
+            font-size: 28px;
+            font-weight: 800;
+        }
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-weight: 700;
+            background: rgba(239, 68, 68, 0.16);
+            color: #fecaca;
+        }
+        .status.enabled {
+            background: rgba(16, 185, 129, 0.16);
+            color: #a7f3d0;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        .log-list {
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+            max-height: 420px;
+            overflow: hidden;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: 14px;
+        }
+        .log-list li {
+            border-top: 1px solid rgba(148, 163, 184, 0.14);
+            padding: 9px 0;
+            color: #cbd5e1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        code {
+            color: #bfdbfe;
+        }
+        @media (max-width: 760px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="wrap">
+        <h1>Console Log Generator</h1>
+        <p class="lede">Open browser or CEF developer tools to see generated console messages. Change settings from <code>/admin</code>.</p>
+
+        <section class="panel">
+            <p id="enabled-pill" class="status"><span class="dot"></span><span>Disabled</span></p>
+            <div class="grid">
+                <div class="metric">
+                    <div class="label">Selected Type</div>
+                    <div class="value" id="level-value">any</div>
+                </div>
+                <div class="metric">
+                    <div class="label">Logs / 10s</div>
+                    <div class="value" id="count-value">0</div>
+                </div>
+                <div class="metric">
+                    <div class="label">Total Emitted</div>
+                    <div class="value" id="total-value">0</div>
+                </div>
+            </div>
+            <div class="label">Recent messages</div>
+            <ul id="recent-logs" class="log-list"></ul>
+        </section>
+    </main>
+
+    <script>
+        const LOG_TYPES = ['INFO', 'ERROR', 'WARN', 'FATAL', 'VERBOSE'];
+        const enabledPill = document.getElementById('enabled-pill');
+        const levelValue = document.getElementById('level-value');
+        const countValue = document.getElementById('count-value');
+        const totalValue = document.getElementById('total-value');
+        const recentLogs = document.getElementById('recent-logs');
+        let activeConfig = { enabled: false, level: 'any', count_per_10s: 0 };
+        let timer = null;
+        let totalEmitted = 0;
+        let activeConfigKey = '';
+
+        function normalizeConfig(raw) {
+            const config = raw && typeof raw === 'object' ? raw : {};
+            const level = String(config.level || 'any').toUpperCase();
+            const count = parseInt(config.count_per_10s, 10);
+            return {
+                enabled: !!config.enabled,
+                level: level === 'ANY' ? 'any' : (LOG_TYPES.includes(level) ? level : 'any'),
+                count_per_10s: Number.isFinite(count) && count > 0 ? count : 0,
+            };
+        }
+
+        function updateUi(config) {
+            enabledPill.classList.toggle('enabled', config.enabled);
+            enabledPill.querySelector('span:last-child').textContent = config.enabled ? 'Enabled' : 'Disabled';
+            levelValue.textContent = config.level;
+            countValue.textContent = String(config.count_per_10s);
+            totalValue.textContent = String(totalEmitted);
+        }
+
+        function pickType(level) {
+            if (level === 'any') {
+                return LOG_TYPES[Math.floor(Math.random() * LOG_TYPES.length)];
+            }
+            return level;
+        }
+
+        function addRecent(message) {
+            const item = document.createElement('li');
+            item.textContent = message;
+            recentLogs.prepend(item);
+            while (recentLogs.children.length > 30) {
+                recentLogs.removeChild(recentLogs.lastChild);
+            }
+        }
+
+        function writeConsole(type, message) {
+            if (type === 'ERROR' || type === 'FATAL') {
+                console.error(message);
+            } else if (type === 'WARN') {
+                console.warn(message);
+            } else if (type === 'INFO') {
+                console.info(message);
+            } else {
+                console.debug(message);
+            }
+        }
+
+        function emitBatch() {
+            if (!activeConfig.enabled || activeConfig.count_per_10s <= 0) return;
+            for (let i = 0; i < activeConfig.count_per_10s; i += 1) {
+                const type = pickType(activeConfig.level);
+                totalEmitted += 1;
+                const message = '[' + type + '] console-log test #' + totalEmitted + ' batch item ' + (i + 1) + '/' + activeConfig.count_per_10s + ' at ' + new Date().toISOString();
+                writeConsole(type, message);
+                addRecent(message);
+            }
+            totalValue.textContent = String(totalEmitted);
+        }
+
+        function applyConfig(rawConfig) {
+            const nextConfig = normalizeConfig(rawConfig);
+            const nextConfigKey = JSON.stringify(nextConfig);
+            if (nextConfigKey === activeConfigKey) return;
+            activeConfig = nextConfig;
+            activeConfigKey = nextConfigKey;
+            updateUi(activeConfig);
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
+            if (activeConfig.enabled && activeConfig.count_per_10s > 0) {
+                emitBatch();
+                timer = setInterval(emitBatch, 10000);
+            }
+        }
+
+        async function loadInitialState() {
+            const res = await fetch('/api/overlay');
+            if (!res.ok) throw new Error('GET /api/overlay failed: HTTP ' + res.status);
+            const state = await res.json();
+            applyConfig(state.console_log);
+        }
+
+        function connectStream() {
+            if (!window.EventSource) {
+                addRecent('EventSource unsupported; refresh to pick up admin changes.');
+                return;
+            }
+            const stream = new EventSource('/api/stream');
+            stream.onmessage = (event) => {
+                try {
+                    const state = JSON.parse(event.data);
+                    applyConfig(state.console_log);
+                } catch (err) {
+                    console.warn('[console-log] bad SSE payload', err);
+                }
+            };
+            stream.onerror = () => {
+                console.warn('[console-log] SSE disconnected or retrying');
+            };
+        }
+
+        loadInitialState()
+            .then(connectStream)
+            .catch((err) => {
+                console.error('[console-log] failed to load settings', err);
+                addRecent('Failed to load settings: ' + (err.message || err));
+            });
+    </script>
+</body>
+</html>
