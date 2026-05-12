@@ -141,6 +141,7 @@
         let activeConfig = { enabled: false, level: 'any', count_per_10s: 0 };
         let timer = null;
         let totalEmitted = 0;
+        let batchNumber = 0;
         let activeConfigKey = '';
 
         function normalizeConfig(raw) {
@@ -192,10 +193,11 @@
 
         function emitBatch() {
             if (!activeConfig.enabled || activeConfig.count_per_10s <= 0) return;
+            batchNumber += 1;
             for (let i = 0; i < activeConfig.count_per_10s; i += 1) {
                 const type = pickType(activeConfig.level);
                 totalEmitted += 1;
-                const message = '[' + type + '] console-log test #' + totalEmitted + ' batch item ' + (i + 1) + '/' + activeConfig.count_per_10s + ' at ' + new Date().toISOString();
+                const message = '[' + type + '] console-log test #' + batchNumber + ' batch item ' + (i + 1) + '/' + activeConfig.count_per_10s + ' at ' + new Date().toISOString();
                 writeConsole(type, message);
                 addRecent(message);
             }
