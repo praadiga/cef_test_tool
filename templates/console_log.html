@@ -140,6 +140,7 @@
         const recentLogs = document.getElementById('recent-logs');
         let activeConfig = { enabled: false, level: 'any', count_per_10s: 0 };
         let timer = null;
+        let pendingLogTimers = [];
         let totalEmitted = 0;
         let batchNumber = 0;
         let activeConfigKey = '';
@@ -191,17 +192,35 @@
             }
         }
 
+        function clearPendingLogTimers() {
+            pendingLogTimers.forEach((id) => clearTimeout(id));
+            pendingLogTimers = [];
+        }
+
+        function emitLog(type, batch, itemNumber, batchCount) {
+            totalEmitted += 1;
+            const message = '[' + type + '] console-log test #' + batch + ' batch item ' + itemNumber + '/' + batchCount + ' at ' + new Date().toISOString();
+            writeConsole(type, message);
+            addRecent(message);
+            totalValue.textContent = String(totalEmitted);
+        }
+
         function emitBatch() {
             if (!activeConfig.enabled || activeConfig.count_per_10s <= 0) return;
             batchNumber += 1;
-            for (let i = 0; i < activeConfig.count_per_10s; i += 1) {
+            const currentBatch = batchNumber;
+            const batchCount = activeConfig.count_per_10s;
+            const delays = Array.from({ length: batchCount }, () => Math.floor(Math.random() * 10000)).sort((a, b) => a - b);
+            for (let i = 0; i < batchCount; i += 1) {
                 const type = pickType(activeConfig.level);
-                totalEmitted += 1;
-                const message = '[' + type + '] console-log test #' + batchNumber + ' batch item ' + (i + 1) + '/' + activeConfig.count_per_10s + ' at ' + new Date().toISOString();
-                writeConsole(type, message);
-                addRecent(message);
+                const itemNumber = i + 1;
+                const delayMs = delays[i];
+                const timeoutId = setTimeout(() => {
+                    emitLog(type, currentBatch, itemNumber, batchCount);
+                    pendingLogTimers = pendingLogTimers.filter((id) => id !== timeoutId);
+                }, delayMs);
+                pendingLogTimers.push(timeoutId);
             }
-            totalValue.textContent = String(totalEmitted);
         }
 
         function applyConfig(rawConfig) {
@@ -215,6 +234,7 @@
                 clearInterval(timer);
                 timer = null;
             }
+            clearPendingLogTimers();
             if (activeConfig.enabled && activeConfig.count_per_10s > 0) {
                 emitBatch();
                 timer = setInterval(emitBatch, 10000);
