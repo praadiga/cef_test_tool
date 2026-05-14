@@ -101,6 +101,9 @@
                         <input type="number" id="console_log_count" min="0" step="1" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
                     </label>
                 </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" id="btn-console-dual-preset" class="px-3 py-2 rounded bg-amber-600 text-white text-sm">Test: INFO flood + ERROR burst</button>
+                </div>
                 <p id="console-log-admin-hint" class="text-xs text-slate-500" aria-live="polite"></p>
             </section>
 
@@ -255,7 +258,15 @@
             consoleEnabled.checked = !!consoleLog.enabled;
             consoleLevel.value = consoleLog.level || 'any';
             consoleCount.value = String(consoleLog.count_per_10s != null ? consoleLog.count_per_10s : 10);
-            consoleHint.textContent = 'Console logging: ' + (consoleEnabled.checked ? 'enabled' : 'disabled') + ', type ' + consoleLevel.value + ', ' + consoleCount.value + ' per 10s';
+            if (consoleLog.mode === 'dual_info_error') {
+                consoleHint.textContent = 'Console logging: dual_info_error — INFO every '
+                    + (consoleLog.primary_interval_ms != null ? consoleLog.primary_interval_ms : 50)
+                    + 'ms, ' + (consoleLog.secondary_level || 'ERROR') + ' x'
+                    + (consoleLog.secondary_count != null ? consoleLog.secondary_count : 20)
+                    + ' every ' + (consoleLog.secondary_cycle_ms != null ? consoleLog.secondary_cycle_ms : 10000) + 'ms';
+            } else {
+                consoleHint.textContent = 'Console logging: ' + (consoleEnabled.checked ? 'enabled' : 'disabled') + ', type ' + consoleLevel.value + ', ' + consoleCount.value + ' per 10s';
+            }
 
             const set = (id, v) => {
                 const n = document.getElementById(id);
@@ -321,6 +332,7 @@
                 lband_status: parseInt(document.getElementById('lband_status').value, 10) || 200,
                 console_log: {
                     enabled: document.getElementById('console_log_enabled').checked,
+                    mode: 'batch',
                     level: document.getElementById('console_log_level').value || 'any',
                     count_per_10s: Number.isFinite(consoleCount) && consoleCount > 0 ? consoleCount : 0,
                 },
@@ -393,6 +405,35 @@
                 });
                 applyOverlay();
             });
+        });
+
+        document.getElementById('btn-console-dual-preset').addEventListener('click', async () => {
+            const hint = document.getElementById('console-log-admin-hint');
+            hint.textContent = 'Applying dual_info_error preset…';
+            try {
+                const res = await fetch('/api/overlay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        console_log: {
+                            enabled: true,
+                            mode: 'dual_info_error',
+                            primary_interval_ms: 50,
+                            secondary_level: 'ERROR',
+                            secondary_count: 20,
+                            secondary_cycle_ms: 10000,
+                        },
+                    }),
+                });
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                fillForm(data);
+                msg('Console log preset applied: INFO flood + ERROR burst.', true);
+            } catch (e) {
+                console.error(e);
+                msg('Console log preset failed: ' + (e.message || e), false);
+                hint.textContent = 'Preset failed';
+            }
         });
 
         async function applyOverlay() {

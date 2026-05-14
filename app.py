@@ -56,8 +56,13 @@ DEFAULT_OVERLAY = {
     "sound": {"seq": 0, "clip": None},
     "console_log": {
         "enabled": False,
+        "mode": "batch",
         "level": "any",
         "count_per_10s": 10,
+        "primary_interval_ms": 50,
+        "secondary_level": "ERROR",
+        "secondary_count": 20,
+        "secondary_cycle_ms": 10000,
     },
     # Controls /video_hls: toggled from admin via POST /api/hls, pushed on /api/stream (SSE)
     "hls": {

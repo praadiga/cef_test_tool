@@ -41,6 +41,9 @@
             gap: 14px;
             margin-bottom: 20px;
         }
+        .grid.dual {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
         .metric {
             border: 1px solid rgba(148, 163, 184, 0.18);
             border-radius: 12px;
@@ -57,6 +60,10 @@
             margin-top: 8px;
             font-size: 28px;
             font-weight: 800;
+        }
+        .value.small {
+            font-size: 18px;
+            line-height: 1.35;
         }
         .status {
             display: inline-flex;
@@ -99,7 +106,8 @@
             color: #bfdbfe;
         }
         @media (max-width: 760px) {
-            .grid {
+            .grid,
+            .grid.dual {
                 grid-template-columns: 1fr;
             }
         }
@@ -112,12 +120,24 @@
 
         <section class="panel">
             <p id="enabled-pill" class="status"><span class="dot"></span><span>Disabled</span></p>
-            <div class="grid">
-                <div class="metric">
+            <div class="grid" id="metrics-grid">
+                <div class="metric" id="metric-mode">
+                    <div class="label">Mode</div>
+                    <div class="value small" id="mode-value">batch</div>
+                </div>
+                <div class="metric" id="metric-primary" hidden>
+                    <div class="label">Primary</div>
+                    <div class="value small" id="primary-value">—</div>
+                </div>
+                <div class="metric" id="metric-secondary" hidden>
+                    <div class="label">Secondary</div>
+                    <div class="value small" id="secondary-value">—</div>
+                </div>
+                <div class="metric" id="metric-level">
                     <div class="label">Selected Type</div>
                     <div class="value" id="level-value">any</div>
                 </div>
-                <div class="metric">
+                <div class="metric" id="metric-count">
                     <div class="label">Logs / 10s</div>
                     <div class="value" id="count-value">0</div>
                 </div>
@@ -134,33 +154,89 @@
     <script>
         const LOG_TYPES = ['INFO', 'ERROR', 'WARN', 'FATAL', 'VERBOSE'];
         const enabledPill = document.getElementById('enabled-pill');
+        const metricsGrid = document.getElementById('metrics-grid');
+        const metricMode = document.getElementById('metric-mode');
+        const metricPrimary = document.getElementById('metric-primary');
+        const metricSecondary = document.getElementById('metric-secondary');
+        const metricLevel = document.getElementById('metric-level');
+        const metricCount = document.getElementById('metric-count');
+        const modeValue = document.getElementById('mode-value');
+        const primaryValue = document.getElementById('primary-value');
+        const secondaryValue = document.getElementById('secondary-value');
         const levelValue = document.getElementById('level-value');
         const countValue = document.getElementById('count-value');
         const totalValue = document.getElementById('total-value');
         const recentLogs = document.getElementById('recent-logs');
-        let activeConfig = { enabled: false, level: 'any', count_per_10s: 0 };
-        let timer = null;
+        let activeConfig = { enabled: false, mode: 'batch', level: 'any', count_per_10s: 0 };
+        let batchTimer = null;
+        let primaryTimer = null;
+        let secondaryTimer = null;
         let pendingLogTimers = [];
         let totalEmitted = 0;
+        let primaryEmitted = 0;
+        let secondaryEmitted = 0;
         let batchNumber = 0;
+        let dualSeq = 0;
+        let secondaryBursts = 0;
         let activeConfigKey = '';
+
+        function positiveInt(value, fallback) {
+            const n = parseInt(value, 10);
+            return Number.isFinite(n) && n > 0 ? n : fallback;
+        }
 
         function normalizeConfig(raw) {
             const config = raw && typeof raw === 'object' ? raw : {};
+            const mode = String(config.mode || 'batch').toLowerCase();
+            if (mode === 'dual_info_error') {
+                const secondaryLevel = String(config.secondary_level || 'ERROR').toUpperCase();
+                return {
+                    enabled: !!config.enabled,
+                    mode: 'dual_info_error',
+                    primary_interval_ms: positiveInt(config.primary_interval_ms, 50),
+                    secondary_level: LOG_TYPES.includes(secondaryLevel) ? secondaryLevel : 'ERROR',
+                    secondary_count: positiveInt(config.secondary_count, 20),
+                    secondary_cycle_ms: positiveInt(config.secondary_cycle_ms, 10000),
+                };
+            }
             const level = String(config.level || 'any').toUpperCase();
             const count = parseInt(config.count_per_10s, 10);
             return {
                 enabled: !!config.enabled,
+                mode: 'batch',
                 level: level === 'ANY' ? 'any' : (LOG_TYPES.includes(level) ? level : 'any'),
                 count_per_10s: Number.isFinite(count) && count > 0 ? count : 0,
             };
         }
 
+        function isDualMode(config) {
+            return config.mode === 'dual_info_error';
+        }
+
         function updateUi(config) {
+            const dual = isDualMode(config);
             enabledPill.classList.toggle('enabled', config.enabled);
             enabledPill.querySelector('span:last-child').textContent = config.enabled ? 'Enabled' : 'Disabled';
-            levelValue.textContent = config.level;
-            countValue.textContent = String(config.count_per_10s);
+            metricsGrid.classList.toggle('dual', dual);
+            metricMode.hidden = false;
+            metricPrimary.hidden = !dual;
+            metricSecondary.hidden = !dual;
+            metricLevel.hidden = dual;
+            metricCount.hidden = dual;
+            modeValue.textContent = config.mode;
+            if (dual) {
+                const primaryRunning = config.enabled && !!primaryTimer;
+                const secondaryRunning = config.enabled && !!secondaryTimer;
+                primaryValue.textContent = (primaryRunning ? 'RUNNING' : 'STOPPED')
+                    + ' · INFO every ' + config.primary_interval_ms + 'ms · ' + primaryEmitted + ' sent';
+                secondaryValue.textContent = (secondaryRunning ? 'RUNNING' : 'STOPPED')
+                    + ' · ' + config.secondary_level + ' x' + config.secondary_count
+                    + ' / ' + config.secondary_cycle_ms + 'ms · bursts ' + secondaryBursts
+                    + ' · ' + secondaryEmitted + ' sent';
+            } else {
+                levelValue.textContent = config.level;
+                countValue.textContent = String(config.count_per_10s);
+            }
             totalValue.textContent = String(totalEmitted);
         }
 
@@ -197,7 +273,23 @@
             pendingLogTimers = [];
         }
 
-        function emitLog(type, batch, itemNumber, batchCount) {
+        function stopAllTimers() {
+            if (batchTimer) {
+                clearInterval(batchTimer);
+                batchTimer = null;
+            }
+            if (primaryTimer) {
+                clearInterval(primaryTimer);
+                primaryTimer = null;
+            }
+            if (secondaryTimer) {
+                clearInterval(secondaryTimer);
+                secondaryTimer = null;
+            }
+            clearPendingLogTimers();
+        }
+
+        function emitBatchLog(type, batch, itemNumber, batchCount) {
             totalEmitted += 1;
             const message = '[' + type + '] console-log test #' + batch + ' batch item ' + itemNumber + '/' + batchCount + ' at ' + new Date().toISOString();
             writeConsole(type, message);
@@ -216,28 +308,67 @@
                 const itemNumber = i + 1;
                 const delayMs = delays[i];
                 const timeoutId = setTimeout(() => {
-                    emitLog(type, currentBatch, itemNumber, batchCount);
+                    emitBatchLog(type, currentBatch, itemNumber, batchCount);
                     pendingLogTimers = pendingLogTimers.filter((id) => id !== timeoutId);
                 }, delayMs);
                 pendingLogTimers.push(timeoutId);
             }
         }
 
+        function emitDualLog(level) {
+            dualSeq += 1;
+            totalEmitted += 1;
+            if (level === 'INFO') {
+                primaryEmitted += 1;
+            } else {
+                secondaryEmitted += 1;
+            }
+            const message = '[CEF_TEST] [dual] [' + level + '] seq=' + dualSeq + ' t=' + Date.now();
+            writeConsole(level, message);
+            addRecent(message);
+            updateUi(activeConfig);
+        }
+
+        function emitSecondaryBurst() {
+            if (!activeConfig.enabled) return;
+            secondaryBursts += 1;
+            const count = activeConfig.secondary_count;
+            const level = activeConfig.secondary_level;
+            for (let i = 0; i < count; i += 1) {
+                emitDualLog(level);
+            }
+        }
+
+        function startBatchMode(config) {
+            if (!config.enabled || config.count_per_10s <= 0) return;
+            emitBatch();
+            batchTimer = setInterval(emitBatch, 10000);
+        }
+
+        function startDualMode(config) {
+            if (!config.enabled) return;
+            primaryTimer = setInterval(() => emitDualLog('INFO'), config.primary_interval_ms);
+            emitSecondaryBurst();
+            secondaryTimer = setInterval(emitSecondaryBurst, config.secondary_cycle_ms);
+            updateUi(config);
+        }
+
         function applyConfig(rawConfig) {
             const nextConfig = normalizeConfig(rawConfig);
             const nextConfigKey = JSON.stringify(nextConfig);
-            if (nextConfigKey === activeConfigKey) return;
+            if (nextConfigKey === activeConfigKey) {
+                updateUi(activeConfig);
+                return;
+            }
             activeConfig = nextConfig;
             activeConfigKey = nextConfigKey;
+            stopAllTimers();
             updateUi(activeConfig);
-            if (timer) {
-                clearInterval(timer);
-                timer = null;
-            }
-            clearPendingLogTimers();
-            if (activeConfig.enabled && activeConfig.count_per_10s > 0) {
-                emitBatch();
-                timer = setInterval(emitBatch, 10000);
+            if (!activeConfig.enabled) return;
+            if (isDualMode(activeConfig)) {
+                startDualMode(activeConfig);
+            } else {
+                startBatchMode(activeConfig);
             }
         }
 
