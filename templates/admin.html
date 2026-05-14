@@ -81,25 +81,88 @@
 
             <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Console log generator <code class="text-sm font-mono">/console-log</code></h2>
-                <p class="text-sm text-slate-600">Controls how many browser console messages the <code class="bg-slate-100 px-1 rounded">/console-log</code> page emits every 10 seconds.</p>
+                <p class="text-sm text-slate-600">Controls browser <code class="bg-slate-100 px-1 rounded">console.*</code> traffic for CEF filtering and token-bucket tests. Player must set this site URL plus <code class="bg-slate-100 px-1 rounded">console-log</code> and <code class="bg-slate-100 px-1 rounded">console-log-limit</code> separately.</p>
                 <label class="flex items-center gap-2 text-sm font-medium">
                     <input type="checkbox" id="console_log_enabled" class="rounded border-slate-300" />
                     Enable console logging
                 </label>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="block text-sm font-medium">Mode
+                        <select id="console_log_mode" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+                            <option value="steady_random">steady_random</option>
+                            <option value="burst">burst</option>
+                            <option value="sustained">sustained</option>
+                            <option value="mixed_burst">mixed_burst</option>
+                            <option value="idle_burst">idle_burst</option>
+                            <option value="dual">dual</option>
+                        </select>
+                    </label>
                     <label class="block text-sm font-medium">Log type
                         <select id="console_log_level" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
                             <option value="any">Any type</option>
-                            <option value="INFO">INFO</option>
-                            <option value="ERROR">ERROR</option>
-                            <option value="WARN">WARN</option>
-                            <option value="FATAL">FATAL</option>
                             <option value="VERBOSE">VERBOSE</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARN">WARN</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="FATAL">FATAL</option>
                         </select>
                     </label>
-                    <label class="block text-sm font-medium">Logs per 10 seconds
+                    <label class="block text-sm font-medium">Count / rounds
                         <input type="number" id="console_log_count" min="0" step="1" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
                     </label>
+                    <label class="block text-sm font-medium">Cycle ms
+                        <input type="number" id="console_log_cycle_ms" min="100" max="600000" step="100" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium console-mode-field" data-modes="sustained dual">Interval ms
+                        <input type="number" id="console_log_interval_ms" min="100" max="600000" step="100" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium console-mode-field" data-modes="idle_burst">Idle ms
+                        <input type="number" id="console_log_idle_ms" min="100" max="600000" step="100" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Message prefix
+                        <input type="text" id="console_log_prefix" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-mono" />
+                    </label>
+                </div>
+                <div id="console-secondary-block" class="rounded border border-slate-200 p-3 space-y-3">
+                    <label class="flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" id="console_log_secondary_enabled" class="rounded border-slate-300" />
+                        Enable secondary stream
+                    </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label class="block text-sm font-medium">Secondary level
+                            <select id="console_log_secondary_level" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+                                <option value="VERBOSE">VERBOSE</option>
+                                <option value="INFO">INFO</option>
+                                <option value="WARN">WARN</option>
+                                <option value="ERROR">ERROR</option>
+                                <option value="FATAL">FATAL</option>
+                            </select>
+                        </label>
+                        <label class="block text-sm font-medium">Secondary count
+                            <input type="number" id="console_log_secondary_count" min="0" step="1" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                        </label>
+                        <label class="block text-sm font-medium">Trigger
+                            <select id="console_log_secondary_trigger" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+                                <option value="each_cycle">each_cycle</option>
+                                <option value="once">once</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                <div class="rounded border border-blue-100 bg-blue-50 p-3 space-y-2">
+                    <h3 class="text-sm font-semibold text-blue-950">CEF test presets</h3>
+                    <p class="text-xs text-blue-900">Buttons fill this form only. They do not change player settings.</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" class="console-preset-btn px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs" data-preset="baseline_burst">baseline_burst</button>
+                        <button type="button" class="console-preset-btn px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs" data-preset="rate_limit_burst">rate_limit_burst</button>
+                        <button type="button" class="console-preset-btn px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs" data-preset="rate_limit_sustained">rate_limit_sustained</button>
+                        <button type="button" class="console-preset-btn px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs" data-preset="per_level_mixed">per_level_mixed</button>
+                        <button type="button" class="console-preset-btn px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs" data-preset="error_under_info_flood">error_under_info_flood</button>
+                        <button type="button" class="console-preset-btn px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs" data-preset="refill_after_idle">refill_after_idle</button>
+                        <button type="button" class="console-preset-btn px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs" data-preset="severity_error_only">severity_error_only</button>
+                        <button type="button" class="console-preset-btn px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs" data-preset="steady_random_default">steady_random_default</button>
+                    </div>
+                    <p id="console-preset-help" class="text-xs text-blue-950"></p>
                 </div>
                 <p id="console-log-admin-hint" class="text-xs text-slate-500" aria-live="polite"></p>
             </section>
@@ -225,6 +288,141 @@
             el.classList.add(ok ? 'text-green-700' : 'text-red-700');
         };
 
+        const CONSOLE_DEFAULT = {
+            enabled: false,
+            level: 'any',
+            count_per_10s: 0,
+            mode: 'steady_random',
+            cycle_ms: 10000,
+            interval_ms: 1000,
+            idle_ms: 15000,
+            message_prefix: 'CEF_TEST',
+            secondary: { enabled: false, level: 'ERROR', count: 20, trigger: 'each_cycle' },
+        };
+
+        const CONSOLE_PRESETS = {
+            baseline_burst: {
+                help: 'Player: console-log=4, console-log-limit=0. Expect about 50 INFO lines if severity allows.',
+                config: { enabled: true, mode: 'burst', level: 'INFO', count_per_10s: 50, cycle_ms: 10000 },
+            },
+            rate_limit_burst: {
+                help: 'Player: console-log=4, console-log-limit=1. Expect initial INFO burst allowed, then drops.',
+                config: { enabled: true, mode: 'burst', level: 'INFO', count_per_10s: 50, cycle_ms: 10000 },
+            },
+            rate_limit_sustained: {
+                help: 'Player: console-log=4, console-log-limit=1. Observe sustained INFO around refill rate.',
+                config: { enabled: true, mode: 'sustained', level: 'INFO', count_per_10s: 30, cycle_ms: 10000, interval_ms: 1000 },
+            },
+            per_level_mixed: {
+                help: 'Player: console-log=5, console-log-limit=1. VERBOSE/INFO/WARN/ERROR buckets throttle independently.',
+                config: { enabled: true, mode: 'mixed_burst', level: 'any', count_per_10s: 20, cycle_ms: 10000 },
+            },
+            error_under_info_flood: {
+                help: 'Player: console-log=4, console-log-limit=1. INFO floods while ERROR burst should still pass on its bucket.',
+                config: {
+                    enabled: true,
+                    mode: 'dual',
+                    level: 'INFO',
+                    count_per_10s: 0,
+                    cycle_ms: 10000,
+                    interval_ms: 50,
+                    secondary: { enabled: true, level: 'ERROR', count: 20, trigger: 'each_cycle' },
+                },
+            },
+            refill_after_idle: {
+                help: 'Player: console-log=4, console-log-limit=1. Quiet period lets bucket refill before next INFO burst.',
+                config: { enabled: true, mode: 'idle_burst', level: 'INFO', count_per_10s: 15, cycle_ms: 10000, idle_ms: 15000 },
+            },
+            severity_error_only: {
+                help: 'Player: console-log=2, console-log-limit=0. ERROR lines should pass; INFO/WARN should not.',
+                config: { enabled: true, mode: 'burst', level: 'ERROR', count_per_10s: 30, cycle_ms: 10000 },
+            },
+            steady_random_default: {
+                help: 'Player: console-log=4, console-log-limit=1. Backward-compatible random traffic over each cycle.',
+                config: { enabled: true, mode: 'steady_random', level: 'any', count_per_10s: 30, cycle_ms: 10000 },
+            },
+        };
+
+        function clampInt(value, fallback, min, max) {
+            const parsed = parseInt(value, 10);
+            if (!Number.isFinite(parsed)) return fallback;
+            return Math.max(min, Math.min(max, parsed));
+        }
+
+        function normalizeConsoleLog(config) {
+            const merged = {
+                ...CONSOLE_DEFAULT,
+                ...(config || {}),
+                secondary: { ...CONSOLE_DEFAULT.secondary, ...((config && config.secondary) || {}) },
+            };
+            const modeNames = ['steady_random', 'burst', 'sustained', 'mixed_burst', 'idle_burst', 'dual'];
+            const levelNames = ['any', 'VERBOSE', 'INFO', 'WARN', 'ERROR', 'FATAL'];
+            const normalizedLevel = String(merged.level || 'any').toUpperCase();
+            const secondaryLevel = String(merged.secondary.level || 'ERROR').toUpperCase();
+            return {
+                enabled: !!merged.enabled,
+                mode: modeNames.includes(merged.mode) ? merged.mode : 'steady_random',
+                level: normalizedLevel === 'ANY' || !levelNames.includes(normalizedLevel) ? 'any' : normalizedLevel,
+                count_per_10s: clampInt(merged.count_per_10s, 0, 0, 100000),
+                cycle_ms: clampInt(merged.cycle_ms, 10000, 100, 600000),
+                interval_ms: clampInt(merged.interval_ms, 1000, 100, 600000),
+                idle_ms: clampInt(merged.idle_ms, 15000, 100, 600000),
+                message_prefix: String(merged.message_prefix || 'CEF_TEST').trim() || 'CEF_TEST',
+                secondary: {
+                    enabled: !!merged.secondary.enabled,
+                    level: secondaryLevel === 'ANY' || !levelNames.includes(secondaryLevel) ? 'ERROR' : secondaryLevel,
+                    count: clampInt(merged.secondary.count, 20, 0, 100000),
+                    trigger: merged.secondary.trigger === 'once' ? 'once' : 'each_cycle',
+                },
+            };
+        }
+
+        function updateConsoleLogVisibility() {
+            const mode = document.getElementById('console_log_mode').value;
+            document.querySelectorAll('.console-mode-field').forEach((el) => {
+                const modes = (el.dataset.modes || '').split(/\s+/);
+                el.classList.toggle('hidden', !modes.includes(mode));
+            });
+            document.getElementById('console-secondary-block').classList.toggle('hidden', mode !== 'dual');
+        }
+
+        function setConsoleLogForm(config) {
+            const c = normalizeConsoleLog(config);
+            document.getElementById('console_log_enabled').checked = c.enabled;
+            document.getElementById('console_log_mode').value = c.mode;
+            document.getElementById('console_log_level').value = c.level;
+            document.getElementById('console_log_count').value = String(c.count_per_10s);
+            document.getElementById('console_log_cycle_ms').value = String(c.cycle_ms);
+            document.getElementById('console_log_interval_ms').value = String(c.interval_ms);
+            document.getElementById('console_log_idle_ms').value = String(c.idle_ms);
+            document.getElementById('console_log_prefix').value = c.message_prefix;
+            document.getElementById('console_log_secondary_enabled').checked = c.secondary.enabled;
+            document.getElementById('console_log_secondary_level').value = c.secondary.level;
+            document.getElementById('console_log_secondary_count').value = String(c.secondary.count);
+            document.getElementById('console_log_secondary_trigger').value = c.secondary.trigger;
+            updateConsoleLogVisibility();
+            document.getElementById('console-log-admin-hint').textContent = 'Console logging: ' + (c.enabled ? 'enabled' : 'disabled') + ', mode ' + c.mode + ', type ' + c.level + ', count ' + c.count_per_10s + ', cycle ' + c.cycle_ms + 'ms';
+        }
+
+        function readConsoleLogForm() {
+            return normalizeConsoleLog({
+                enabled: document.getElementById('console_log_enabled').checked,
+                mode: document.getElementById('console_log_mode').value,
+                level: document.getElementById('console_log_level').value,
+                count_per_10s: document.getElementById('console_log_count').value,
+                cycle_ms: document.getElementById('console_log_cycle_ms').value,
+                interval_ms: document.getElementById('console_log_interval_ms').value,
+                idle_ms: document.getElementById('console_log_idle_ms').value,
+                message_prefix: document.getElementById('console_log_prefix').value,
+                secondary: {
+                    enabled: document.getElementById('console_log_secondary_enabled').checked,
+                    level: document.getElementById('console_log_secondary_level').value,
+                    count: document.getElementById('console_log_secondary_count').value,
+                    trigger: document.getElementById('console_log_secondary_trigger').value,
+                },
+            });
+        }
+
         function fillForm(s) {
             document.getElementById('main_status').value = String(s.main_status != null ? s.main_status : 200);
             document.querySelectorAll('.main-status-btn').forEach((b) => {
@@ -247,15 +445,7 @@
                 b.classList.toggle('text-white', on);
                 b.classList.toggle('bg-slate-200', !on);
             });
-            const consoleLog = s.console_log || {};
-            const consoleEnabled = document.getElementById('console_log_enabled');
-            const consoleLevel = document.getElementById('console_log_level');
-            const consoleCount = document.getElementById('console_log_count');
-            const consoleHint = document.getElementById('console-log-admin-hint');
-            consoleEnabled.checked = !!consoleLog.enabled;
-            consoleLevel.value = consoleLog.level || 'any';
-            consoleCount.value = String(consoleLog.count_per_10s != null ? consoleLog.count_per_10s : 10);
-            consoleHint.textContent = 'Console logging: ' + (consoleEnabled.checked ? 'enabled' : 'disabled') + ', type ' + consoleLevel.value + ', ' + consoleCount.value + ' per 10s';
+            setConsoleLogForm(s.console_log);
 
             const set = (id, v) => {
                 const n = document.getElementById(id);
@@ -314,16 +504,11 @@
 
             const pi = parseInt(document.getElementById('prob_ind_pct').value, 10);
             const pa = parseInt(document.getElementById('prob_aus_pct').value, 10);
-            const consoleCount = parseInt(document.getElementById('console_log_count').value, 10);
             return {
                 main_status: parseInt(document.getElementById('main_status').value, 10) || 200,
                 logo_status: parseInt(document.getElementById('logo_status').value, 10) || 200,
                 lband_status: parseInt(document.getElementById('lband_status').value, 10) || 200,
-                console_log: {
-                    enabled: document.getElementById('console_log_enabled').checked,
-                    level: document.getElementById('console_log_level').value || 'any',
-                    count_per_10s: Number.isFinite(consoleCount) && consoleCount > 0 ? consoleCount : 0,
-                },
+                console_log: readConsoleLogForm(),
                 series_title: document.getElementById('series_title').value,
                 viewer_count: document.getElementById('viewer_count').value,
                 team: document.getElementById('team').value,
@@ -391,6 +576,18 @@
                     b.classList.toggle('text-white', on);
                     b.classList.toggle('bg-slate-200', !on);
                 });
+                applyOverlay();
+            });
+        });
+
+        document.getElementById('console_log_mode').addEventListener('change', updateConsoleLogVisibility);
+        document.querySelectorAll('.console-preset-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const preset = CONSOLE_PRESETS[btn.dataset.preset];
+                if (!preset) return;
+                const current = readConsoleLogForm();
+                setConsoleLogForm({ ...current, ...preset.config, secondary: { ...current.secondary, ...(preset.config.secondary || {}) } });
+                document.getElementById('console-preset-help').textContent = preset.help;
                 applyOverlay();
             });
         });

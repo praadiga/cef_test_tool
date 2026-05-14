@@ -37,7 +37,7 @@
         }
         .grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 14px;
             margin-bottom: 20px;
         }
@@ -98,6 +98,15 @@
         code {
             color: #bfdbfe;
         }
+        .docs {
+            margin-top: 18px;
+            color: #94a3b8;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+        .docs strong {
+            color: #e2e8f0;
+        }
         @media (max-width: 760px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -118,8 +127,16 @@
                     <div class="value" id="level-value">any</div>
                 </div>
                 <div class="metric">
-                    <div class="label">Logs / 10s</div>
+                    <div class="label">Mode</div>
+                    <div class="value" id="mode-value">steady_random</div>
+                </div>
+                <div class="metric">
+                    <div class="label">Count / Rounds</div>
                     <div class="value" id="count-value">0</div>
+                </div>
+                <div class="metric">
+                    <div class="label">Batch</div>
+                    <div class="value" id="batch-value">0</div>
                 </div>
                 <div class="metric">
                     <div class="label">Total Emitted</div>
@@ -128,31 +145,65 @@
             </div>
             <div class="label">Recent messages</div>
             <ul id="recent-logs" class="log-list"></ul>
+            <div class="docs">
+                <p><strong>Player reminder:</strong> configure <code>console-log</code> and <code>console-log-limit</code> in the player separately. This page only emits browser console output.</p>
+                <p>Token-bucket tests should expect an initial burst around 10 messages per CEF severity level, then about 1/s per level when player rate limiting is enabled. This is not a hard “10 logs per 10 seconds” cap.</p>
+                <p><code>FATAL</code> is emitted with <code>console.error</code>, so many CEF builds classify it as ERROR.</p>
+                <p><strong>Preset guide:</strong> <code>baseline_burst</code> uses player <code>console-log=4</code>, limit <code>0</code>; <code>rate_limit_burst</code>, <code>rate_limit_sustained</code>, <code>refill_after_idle</code>, and <code>error_under_info_flood</code> use player <code>console-log=4</code>, limit <code>1</code>; <code>per_level_mixed</code> uses player <code>console-log=5</code>, limit <code>1</code>; <code>severity_error_only</code> uses player <code>console-log=2</code>, limit <code>0</code>.</p>
+            </div>
         </section>
     </main>
 
     <script>
-        const LOG_TYPES = ['INFO', 'ERROR', 'WARN', 'FATAL', 'VERBOSE'];
+        const LOG_TYPES = ['VERBOSE', 'INFO', 'WARN', 'ERROR', 'FATAL'];
+        const MODE_NAMES = ['steady_random', 'burst', 'sustained', 'mixed_burst', 'idle_burst', 'dual'];
         const enabledPill = document.getElementById('enabled-pill');
         const levelValue = document.getElementById('level-value');
+        const modeValue = document.getElementById('mode-value');
         const countValue = document.getElementById('count-value');
+        const batchValue = document.getElementById('batch-value');
         const totalValue = document.getElementById('total-value');
         const recentLogs = document.getElementById('recent-logs');
-        let activeConfig = { enabled: false, level: 'any', count_per_10s: 0 };
-        let timer = null;
-        let pendingLogTimers = [];
+        let activeConfig = null;
+        let activeConfigKey = '';
+        let pendingTimers = [];
+        let pendingIntervals = [];
         let totalEmitted = 0;
         let batchNumber = 0;
-        let activeConfigKey = '';
+        let seqNumber = 0;
+        let dualSecondaryFired = false;
+
+        function clampInt(value, fallback, min, max) {
+            const parsed = parseInt(value, 10);
+            if (!Number.isFinite(parsed)) return fallback;
+            return Math.max(min, Math.min(max, parsed));
+        }
+
+        function normalizeLevel(value, fallback) {
+            const level = String(value || fallback || 'any').toUpperCase();
+            if (level === 'ANY') return 'any';
+            return LOG_TYPES.includes(level) ? level : fallback;
+        }
 
         function normalizeConfig(raw) {
             const config = raw && typeof raw === 'object' ? raw : {};
-            const level = String(config.level || 'any').toUpperCase();
-            const count = parseInt(config.count_per_10s, 10);
+            const secondary = config.secondary && typeof config.secondary === 'object' ? config.secondary : {};
+            const mode = MODE_NAMES.includes(config.mode) ? config.mode : 'steady_random';
             return {
                 enabled: !!config.enabled,
-                level: level === 'ANY' ? 'any' : (LOG_TYPES.includes(level) ? level : 'any'),
-                count_per_10s: Number.isFinite(count) && count > 0 ? count : 0,
+                mode: mode,
+                level: normalizeLevel(config.level, 'any'),
+                count_per_10s: clampInt(config.count_per_10s, 0, 0, 100000),
+                cycle_ms: clampInt(config.cycle_ms, 10000, 100, 600000),
+                interval_ms: clampInt(config.interval_ms, 1000, 100, 600000),
+                idle_ms: clampInt(config.idle_ms, 15000, 100, 600000),
+                message_prefix: String(config.message_prefix || 'CEF_TEST').trim() || 'CEF_TEST',
+                secondary: {
+                    enabled: !!secondary.enabled,
+                    level: normalizeLevel(secondary.level, 'ERROR') || 'ERROR',
+                    count: clampInt(secondary.count, 20, 0, 100000),
+                    trigger: secondary.trigger === 'once' ? 'once' : 'each_cycle',
+                },
             };
         }
 
@@ -160,15 +211,10 @@
             enabledPill.classList.toggle('enabled', config.enabled);
             enabledPill.querySelector('span:last-child').textContent = config.enabled ? 'Enabled' : 'Disabled';
             levelValue.textContent = config.level;
+            modeValue.textContent = config.mode;
             countValue.textContent = String(config.count_per_10s);
+            batchValue.textContent = String(batchNumber);
             totalValue.textContent = String(totalEmitted);
-        }
-
-        function pickType(level) {
-            if (level === 'any') {
-                return LOG_TYPES[Math.floor(Math.random() * LOG_TYPES.length)];
-            }
-            return level;
         }
 
         function addRecent(message) {
@@ -178,6 +224,13 @@
             while (recentLogs.children.length > 30) {
                 recentLogs.removeChild(recentLogs.lastChild);
             }
+        }
+
+        function pickType(level) {
+            if (level === 'any') {
+                return LOG_TYPES[Math.floor(Math.random() * LOG_TYPES.length)];
+            }
+            return level;
         }
 
         function writeConsole(type, message) {
@@ -192,34 +245,129 @@
             }
         }
 
-        function clearPendingLogTimers() {
-            pendingLogTimers.forEach((id) => clearTimeout(id));
-            pendingLogTimers = [];
+        function formatMessage(type, meta) {
+            return '[' + activeConfig.message_prefix + '] [' + activeConfig.mode + '] [' + type + '] batch=' + meta.batch + ' seq=' + meta.seq + ' item=' + meta.item + '/' + meta.count + ' t=' + Date.now();
         }
 
-        function emitLog(type, batch, itemNumber, batchCount) {
+        function emitOne(type, meta) {
+            seqNumber += 1;
             totalEmitted += 1;
-            const message = '[' + type + '] console-log test #' + batch + ' batch item ' + itemNumber + '/' + batchCount + ' at ' + new Date().toISOString();
+            const message = formatMessage(type, { ...meta, seq: seqNumber });
             writeConsole(type, message);
             addRecent(message);
             totalValue.textContent = String(totalEmitted);
         }
 
-        function emitBatch() {
-            if (!activeConfig.enabled || activeConfig.count_per_10s <= 0) return;
+        function rememberTimeout(callback, delayMs) {
+            const id = setTimeout(() => {
+                pendingTimers = pendingTimers.filter((timerId) => timerId !== id);
+                callback();
+            }, delayMs);
+            pendingTimers.push(id);
+            return id;
+        }
+
+        function rememberInterval(callback, intervalMs) {
+            const id = setInterval(callback, intervalMs);
+            pendingIntervals.push(id);
+            return id;
+        }
+
+        function clearScheduler() {
+            pendingTimers.forEach((id) => clearTimeout(id));
+            pendingIntervals.forEach((id) => clearInterval(id));
+            pendingTimers = [];
+            pendingIntervals = [];
+            dualSecondaryFired = false;
+        }
+
+        function nextBatch() {
             batchNumber += 1;
-            const currentBatch = batchNumber;
-            const batchCount = activeConfig.count_per_10s;
-            const delays = Array.from({ length: batchCount }, () => Math.floor(Math.random() * 10000)).sort((a, b) => a - b);
-            for (let i = 0; i < batchCount; i += 1) {
+            batchValue.textContent = String(batchNumber);
+            return batchNumber;
+        }
+
+        function runSteadyRandomBatch() {
+            if (!activeConfig.enabled || activeConfig.count_per_10s <= 0) return;
+            const batch = nextBatch();
+            const count = activeConfig.count_per_10s;
+            const delays = Array.from({ length: count }, () => Math.floor(Math.random() * activeConfig.cycle_ms)).sort((a, b) => a - b);
+            for (let i = 0; i < count; i += 1) {
+                const item = i + 1;
                 const type = pickType(activeConfig.level);
-                const itemNumber = i + 1;
-                const delayMs = delays[i];
-                const timeoutId = setTimeout(() => {
-                    emitLog(type, currentBatch, itemNumber, batchCount);
-                    pendingLogTimers = pendingLogTimers.filter((id) => id !== timeoutId);
-                }, delayMs);
-                pendingLogTimers.push(timeoutId);
+                rememberTimeout(() => emitOne(type, { batch, item, count }), delays[i]);
+            }
+        }
+
+        function runBurstBatch(level, count) {
+            if (!activeConfig.enabled || count <= 0) return;
+            const batch = nextBatch();
+            for (let i = 1; i <= count; i += 1) {
+                emitOne(pickType(level), { batch, item: i, count });
+            }
+        }
+
+        function runSustainedBatch() {
+            if (!activeConfig.enabled || activeConfig.count_per_10s <= 0) return;
+            const batch = nextBatch();
+            const count = activeConfig.count_per_10s;
+            for (let i = 0; i < count; i += 1) {
+                const item = i + 1;
+                const type = pickType(activeConfig.level);
+                rememberTimeout(() => emitOne(type, { batch, item, count }), i * activeConfig.interval_ms);
+            }
+        }
+
+        function runMixedBurstBatch() {
+            if (!activeConfig.enabled || activeConfig.count_per_10s <= 0) return;
+            const batch = nextBatch();
+            const levels = ['VERBOSE', 'INFO', 'WARN', 'ERROR'];
+            const total = activeConfig.count_per_10s * levels.length;
+            let item = 0;
+            for (let round = 0; round < activeConfig.count_per_10s; round += 1) {
+                levels.forEach((type) => {
+                    item += 1;
+                    emitOne(type, { batch, item, count: total });
+                });
+            }
+        }
+
+        function scheduleIdleBurstLoop() {
+            if (!activeConfig.enabled) return;
+            rememberTimeout(() => {
+                runBurstBatch(activeConfig.level, activeConfig.count_per_10s);
+                scheduleIdleBurstLoop();
+            }, activeConfig.idle_ms);
+        }
+
+        function runSecondaryBurst() {
+            const secondary = activeConfig.secondary;
+            if (!activeConfig.enabled || !secondary.enabled || secondary.count <= 0) return;
+            if (secondary.trigger === 'once' && dualSecondaryFired) return;
+            dualSecondaryFired = true;
+            runBurstBatch(secondary.level, secondary.count);
+        }
+
+        function startScheduler(config) {
+            if (!config.enabled) return;
+            if (config.mode === 'steady_random') {
+                runSteadyRandomBatch();
+                rememberInterval(runSteadyRandomBatch, config.cycle_ms);
+            } else if (config.mode === 'burst') {
+                runBurstBatch(config.level, config.count_per_10s);
+                rememberInterval(() => runBurstBatch(config.level, config.count_per_10s), config.cycle_ms);
+            } else if (config.mode === 'sustained') {
+                runSustainedBatch();
+                rememberInterval(runSustainedBatch, config.cycle_ms);
+            } else if (config.mode === 'mixed_burst') {
+                runMixedBurstBatch();
+                rememberInterval(runMixedBurstBatch, config.cycle_ms);
+            } else if (config.mode === 'idle_burst') {
+                scheduleIdleBurstLoop();
+            } else if (config.mode === 'dual') {
+                rememberInterval(() => emitOne(pickType(config.level), { batch: batchNumber || nextBatch(), item: 1, count: 1 }), config.interval_ms);
+                runSecondaryBurst();
+                rememberInterval(runSecondaryBurst, config.cycle_ms);
             }
         }
 
@@ -229,16 +377,9 @@
             if (nextConfigKey === activeConfigKey) return;
             activeConfig = nextConfig;
             activeConfigKey = nextConfigKey;
+            clearScheduler();
             updateUi(activeConfig);
-            if (timer) {
-                clearInterval(timer);
-                timer = null;
-            }
-            clearPendingLogTimers();
-            if (activeConfig.enabled && activeConfig.count_per_10s > 0) {
-                emitBatch();
-                timer = setInterval(emitBatch, 10000);
-            }
+            startScheduler(activeConfig);
         }
 
         async function loadInitialState() {
@@ -263,6 +404,7 @@
                 }
             };
             stream.onerror = () => {
+                addRecent('SSE disconnected or retrying; current scheduler continues.');
                 console.warn('[console-log] SSE disconnected or retrying');
             };
         }

@@ -14,6 +14,31 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "cef-test-tool-dev-session-k
 _state_lock = threading.RLock()
 _sse_clients = []
 ADMIN_ACCESS_KEY = os.environ.get("ADMIN_ACCESS_KEY", "amagi123")
+CONSOLE_LOG_LEVELS = {"any", "VERBOSE", "INFO", "WARN", "ERROR", "FATAL"}
+CONSOLE_LOG_MODES = {
+    "steady_random",
+    "burst",
+    "sustained",
+    "mixed_burst",
+    "idle_burst",
+    "dual",
+}
+CONSOLE_LOG_DEFAULT = {
+    "enabled": False,
+    "level": "any",
+    "count_per_10s": 0,
+    "mode": "steady_random",
+    "cycle_ms": 10000,
+    "interval_ms": 1000,
+    "idle_ms": 15000,
+    "secondary": {
+        "enabled": False,
+        "level": "ERROR",
+        "count": 20,
+        "trigger": "each_cycle",
+    },
+    "message_prefix": "CEF_TEST",
+}
 
 DEFAULT_OVERLAY = {
     "main_status": 200,
@@ -54,11 +79,7 @@ DEFAULT_OVERLAY = {
     },
     "recent_balls": ["1", "4", "wd", "6", "1", "0", "4"],
     "sound": {"seq": 0, "clip": None},
-    "console_log": {
-        "enabled": False,
-        "level": "any",
-        "count_per_10s": 10,
-    },
+    "console_log": copy.deepcopy(CONSOLE_LOG_DEFAULT),
     # Controls /video_hls: toggled from admin via POST /api/hls, pushed on /api/stream (SSE)
     "hls": {
         "enabled": True,
@@ -68,6 +89,59 @@ DEFAULT_OVERLAY = {
 }
 
 app_state = copy.deepcopy(DEFAULT_OVERLAY)
+
+
+def clamp_int(value, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def normalize_console_log(config) -> dict:
+    if not isinstance(config, dict):
+        config = {}
+
+    out = copy.deepcopy(CONSOLE_LOG_DEFAULT)
+    out["enabled"] = bool(config.get("enabled", out["enabled"]))
+
+    level = str(config.get("level", out["level"]) or "any").upper()
+    out["level"] = "any" if level == "ANY" else level
+    if out["level"] not in CONSOLE_LOG_LEVELS:
+        out["level"] = "any"
+
+    mode = str(config.get("mode", out["mode"]) or out["mode"])
+    out["mode"] = mode if mode in CONSOLE_LOG_MODES else "steady_random"
+
+    out["count_per_10s"] = clamp_int(config.get("count_per_10s"), out["count_per_10s"], 0, 100000)
+    out["cycle_ms"] = clamp_int(config.get("cycle_ms"), out["cycle_ms"], 100, 600000)
+    out["interval_ms"] = clamp_int(config.get("interval_ms"), out["interval_ms"], 100, 600000)
+    out["idle_ms"] = clamp_int(config.get("idle_ms"), out["idle_ms"], 100, 600000)
+
+    secondary = config.get("secondary", {})
+    if not isinstance(secondary, dict):
+        secondary = {}
+    out["secondary"]["enabled"] = bool(secondary.get("enabled", out["secondary"]["enabled"]))
+    secondary_level = str(secondary.get("level", out["secondary"]["level"]) or "ERROR").upper()
+    out["secondary"]["level"] = "any" if secondary_level == "ANY" else secondary_level
+    if out["secondary"]["level"] not in CONSOLE_LOG_LEVELS:
+        out["secondary"]["level"] = "ERROR"
+    out["secondary"]["count"] = clamp_int(secondary.get("count"), out["secondary"]["count"], 0, 100000)
+    trigger = str(secondary.get("trigger", out["secondary"]["trigger"]) or out["secondary"]["trigger"])
+    out["secondary"]["trigger"] = trigger if trigger in {"each_cycle", "once"} else "each_cycle"
+
+    prefix = config.get("message_prefix", out["message_prefix"])
+    if not isinstance(prefix, str):
+        prefix = str(prefix)
+    out["message_prefix"] = prefix.strip()[:80] or CONSOLE_LOG_DEFAULT["message_prefix"]
+
+    if out["enabled"] and out["mode"] != "dual" and out["count_per_10s"] <= 0:
+        out["enabled"] = False
+    if out["enabled"] and out["mode"] == "dual" and not out["secondary"]["enabled"]:
+        out["secondary"]["enabled"] = True
+
+    return out
 
 
 def deep_merge(target: dict, patch: dict) -> None:
@@ -228,6 +302,8 @@ def post_overlay():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "JSON object required"}), 400
+    if "console_log" in data:
+        data["console_log"] = normalize_console_log(data.get("console_log"))
     with _state_lock:
         deep_merge(app_state, data)
     notify_sse_subscribers()
