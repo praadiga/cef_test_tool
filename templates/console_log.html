@@ -153,6 +153,7 @@
 
     <script>
         const LOG_TYPES = ['INFO', 'ERROR', 'WARN', 'FATAL', 'VERBOSE'];
+        const SECONDARY_BURST_LEVELS = ['ERROR', 'WARN', 'FATAL', 'VERBOSE'];
         const enabledPill = document.getElementById('enabled-pill');
         const metricsGrid = document.getElementById('metrics-grid');
         const metricMode = document.getElementById('metric-mode');
@@ -189,12 +190,15 @@
             const config = raw && typeof raw === 'object' ? raw : {};
             const mode = String(config.mode || 'batch').toLowerCase();
             if (mode === 'dual_info_error') {
-                const secondaryLevel = String(config.secondary_level || 'ERROR').toUpperCase();
+                const rawLevels = Array.isArray(config.secondary_levels) ? config.secondary_levels : SECONDARY_BURST_LEVELS;
+                const secondaryLevels = rawLevels
+                    .map((level) => String(level || '').toUpperCase())
+                    .filter((level) => SECONDARY_BURST_LEVELS.includes(level));
                 return {
                     enabled: !!config.enabled,
                     mode: 'dual_info_error',
                     primary_interval_ms: positiveInt(config.primary_interval_ms, 50),
-                    secondary_level: LOG_TYPES.includes(secondaryLevel) ? secondaryLevel : 'ERROR',
+                    secondary_levels: secondaryLevels.length ? secondaryLevels : SECONDARY_BURST_LEVELS.slice(),
                     secondary_count: positiveInt(config.secondary_count, 20),
                     secondary_cycle_ms: positiveInt(config.secondary_cycle_ms, 10000),
                 };
@@ -230,7 +234,7 @@
                 primaryValue.textContent = (primaryRunning ? 'RUNNING' : 'STOPPED')
                     + ' · INFO every ' + config.primary_interval_ms + 'ms · ' + primaryEmitted + ' sent';
                 secondaryValue.textContent = (secondaryRunning ? 'RUNNING' : 'STOPPED')
-                    + ' · ' + config.secondary_level + ' x' + config.secondary_count
+                    + ' · ' + config.secondary_levels.join('+') + ' x' + config.secondary_count
                     + ' / ' + config.secondary_cycle_ms + 'ms · bursts ' + secondaryBursts
                     + ' · ' + secondaryEmitted + ' sent';
             } else {
@@ -333,9 +337,9 @@
             if (!activeConfig.enabled) return;
             secondaryBursts += 1;
             const count = activeConfig.secondary_count;
-            const level = activeConfig.secondary_level;
+            const levels = activeConfig.secondary_levels;
             for (let i = 0; i < count; i += 1) {
-                emitDualLog(level);
+                emitDualLog(levels[i % levels.length]);
             }
         }
 

@@ -6,6 +6,9 @@ import os
 import queue
 import threading
 import time
+import urllib.error
+import urllib.request
+
 from flask import Flask, render_template, request, abort, jsonify, Response, stream_with_context, redirect, url_for, session
 
 app = Flask(__name__)
@@ -60,7 +63,7 @@ DEFAULT_OVERLAY = {
         "level": "any",
         "count_per_10s": 10,
         "primary_interval_ms": 50,
-        "secondary_level": "ERROR",
+        "secondary_levels": ["ERROR", "WARN", "FATAL", "VERBOSE"],
         "secondary_count": 20,
         "secondary_cycle_ms": 10000,
     },
@@ -70,9 +73,21 @@ DEFAULT_OVERLAY = {
         "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
         "seq": 0,
     },
+    "network_calls": {
+        "random_image_status": 200,
+        "weather_interval_ms": 150000,
+        "random_image_interval_ms": 300000,
+        "weather_lon": 113.17,
+        "weather_lat": 23.09,
+    },
 }
 
 app_state = copy.deepcopy(DEFAULT_OVERLAY)
+
+WEATHER_API_TEMPLATE = (
+    "http://www.7timer.info/bin/api.pl?lon={lon}&lat={lat}&product=astro&output=json"
+)
+PICSUM_IMAGE_URL = "https://picsum.photos/200/500"
 
 
 def deep_merge(target: dict, patch: dict) -> None:
@@ -149,6 +164,9 @@ ROUTE_DOCS = {
     "redirect_route": "HTTP redirect to a fixed external Amplify URL (redirect behavior test).",
     "sse_stream": "Server-Sent Events stream: sends full JSON state on connect and on every update (pings to keep connections alive).",
     "console_log_page": "Console log generator: emits INFO, ERROR, WARN, FATAL, VERBOSE, or random logs using admin settings.",
+    "network_calls_page": "L-band overlay: polls /random-image and /api/weather on configurable intervals (news-style ad strip).",
+    "random_image": "Proxies a random 200×500 image from picsum.photos; HTTP status (200 or 500) is controlled from /admin.",
+    "get_weather": "Server proxy for 7timer astro JSON (avoids browser CORS); used by /network-calls.",
     "admin": "Admin UI: enter the admin key, then edit overlay, play sounds, and control /main / HLS settings.",
     "admin_logout": "Clears the current admin session and returns to the admin key prompt.",
     "display": "Full-page background MP4 from /static/output2.mp4 (like a simple “live” dashboard).",
@@ -180,6 +198,9 @@ ROUTE_EXAMPLE_KWARGS = {
     "redirect_route": {},
     "audio": {},
     "console_log_page": {},
+    "network_calls_page": {},
+    "random_image": {},
+    "get_weather": {},
     "fail_midway": {},
     "sse_stream": {},
     "home": {},
@@ -439,6 +460,48 @@ def audio():
 @app.route("/console-log")
 def console_log_page():
     return render_template("console_log.html")
+
+
+@app.route("/network-calls")
+def network_calls_page():
+    return render_template("network_calls.html")
+
+
+@app.route("/random-image")
+def random_image():
+    with _state_lock:
+        status = int(app_state.get("network_calls", {}).get("random_image_status", 200))
+    if status != 200:
+        abort(status)
+    picsum_url = PICSUM_IMAGE_URL + "?t=" + str(int(time.time() * 1000))
+    try:
+        req = urllib.request.Request(picsum_url, headers={"User-Agent": "cef-test-tool/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read()
+            content_type = resp.headers.get("Content-Type", "image/jpeg")
+        return Response(
+            body,
+            mimetype=content_type,
+            headers={"Cache-Control": "no-store"},
+        )
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+        abort(502, description=str(exc))
+
+
+@app.route("/api/weather")
+def get_weather():
+    with _state_lock:
+        nc = copy.deepcopy(app_state.get("network_calls", {}))
+    lon = nc.get("weather_lon", 113.17)
+    lat = nc.get("weather_lat", 23.09)
+    url = WEATHER_API_TEMPLATE.format(lon=lon, lat=lat)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "cef-test-tool/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        return jsonify(payload)
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, TimeoutError) as exc:
+        return jsonify({"error": str(exc), "url": url}), 502
 
 
 @app.route("/fail-midway")

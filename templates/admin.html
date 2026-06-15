@@ -102,9 +102,34 @@
                     </label>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <button type="button" id="btn-console-dual-preset" class="px-3 py-2 rounded bg-amber-600 text-white text-sm">Test: INFO flood + ERROR burst</button>
+                    <button type="button" id="btn-console-dual-preset" class="px-3 py-2 rounded bg-amber-600 text-white text-sm">Test: INFO flood + multi-level burst</button>
                 </div>
                 <p id="console-log-admin-hint" class="text-xs text-slate-500" aria-live="polite"></p>
+            </section>
+
+            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Network calls <code class="text-sm font-mono">/network-calls</code></h2>
+                <p class="text-sm text-slate-600">L-band page polls <code class="bg-slate-100 px-1 rounded">/random-image</code> (picsum 200×500 proxy) and <code class="bg-slate-100 px-1 rounded">/api/weather</code>.</p>
+                <div>
+                    <p class="text-sm font-medium mb-2"><code>/random-image</code> HTTP status</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" class="px-3 py-2 rounded bg-slate-800 text-white text-sm random-image-status-btn" data-status="200">200 OK</button>
+                        <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm random-image-status-btn" data-status="500">500</button>
+                    </div>
+                    <input type="hidden" id="random_image_status" value="200" />
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="block text-sm font-medium">Weather poll interval (ms)
+                        <input type="number" id="weather_interval_ms" min="1000" step="1000" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm font-medium">Image poll interval (ms)
+                        <input type="number" id="random_image_interval_ms" min="1000" step="1000" class="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                    </label>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button type="button" id="btn-network-save" class="px-3 py-2 rounded bg-blue-600 text-white text-sm">Save network settings</button>
+                </div>
+                <p id="network-calls-admin-hint" class="text-xs text-slate-500" aria-live="polite"></p>
             </section>
 
             <details class="bg-white rounded-lg border border-slate-200 shadow-sm">
@@ -259,13 +284,36 @@
             consoleLevel.value = consoleLog.level || 'any';
             consoleCount.value = String(consoleLog.count_per_10s != null ? consoleLog.count_per_10s : 10);
             if (consoleLog.mode === 'dual_info_error') {
+                const levels = Array.isArray(consoleLog.secondary_levels) && consoleLog.secondary_levels.length
+                    ? consoleLog.secondary_levels.join('+')
+                    : 'ERROR+WARN+FATAL+VERBOSE';
                 consoleHint.textContent = 'Console logging: dual_info_error — INFO every '
                     + (consoleLog.primary_interval_ms != null ? consoleLog.primary_interval_ms : 50)
-                    + 'ms, ' + (consoleLog.secondary_level || 'ERROR') + ' x'
+                    + 'ms, ' + levels + ' x'
                     + (consoleLog.secondary_count != null ? consoleLog.secondary_count : 20)
                     + ' every ' + (consoleLog.secondary_cycle_ms != null ? consoleLog.secondary_cycle_ms : 10000) + 'ms';
             } else {
                 consoleHint.textContent = 'Console logging: ' + (consoleEnabled.checked ? 'enabled' : 'disabled') + ', type ' + consoleLevel.value + ', ' + consoleCount.value + ' per 10s';
+            }
+
+            const nc = s.network_calls || {};
+            const randomImageStatus = document.getElementById('random_image_status');
+            const weatherInterval = document.getElementById('weather_interval_ms');
+            const imageInterval = document.getElementById('random_image_interval_ms');
+            const networkHint = document.getElementById('network-calls-admin-hint');
+            randomImageStatus.value = String(nc.random_image_status != null ? nc.random_image_status : 200);
+            document.querySelectorAll('.random-image-status-btn').forEach((b) => {
+                const on = String(b.dataset.status) === String(randomImageStatus.value);
+                b.classList.toggle('bg-slate-800', on);
+                b.classList.toggle('text-white', on);
+                b.classList.toggle('bg-slate-200', !on);
+            });
+            weatherInterval.value = String(nc.weather_interval_ms != null ? nc.weather_interval_ms : 150000);
+            imageInterval.value = String(nc.random_image_interval_ms != null ? nc.random_image_interval_ms : 300000);
+            if (networkHint) {
+                networkHint.textContent = '/random-image → HTTP ' + randomImageStatus.value
+                    + ' · weather every ' + weatherInterval.value + 'ms'
+                    + ' · image every ' + imageInterval.value + 'ms';
             }
 
             const set = (id, v) => {
@@ -317,6 +365,28 @@
             }
         }
 
+        function parseIntervalMs(raw, fallback) {
+            const n = parseInt(raw, 10);
+            return Number.isFinite(n) && n >= 1000 ? n : fallback;
+        }
+
+        function collectNetworkCallsPayload() {
+            const randomImageStatus = parseInt(document.getElementById('random_image_status').value, 10) || 200;
+            return {
+                random_image_status: randomImageStatus === 500 ? 500 : 200,
+                weather_interval_ms: parseIntervalMs(
+                    document.getElementById('weather_interval_ms').value,
+                    150000
+                ),
+                random_image_interval_ms: parseIntervalMs(
+                    document.getElementById('random_image_interval_ms').value,
+                    300000
+                ),
+                weather_lon: 113.17,
+                weather_lat: 23.09,
+            };
+        }
+
         function collectPayload() {
             const breakingText = document.getElementById('breaking_items').value;
             const items = breakingText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -336,6 +406,7 @@
                     level: document.getElementById('console_log_level').value || 'any',
                     count_per_10s: Number.isFinite(consoleCount) && consoleCount > 0 ? consoleCount : 0,
                 },
+                network_calls: collectNetworkCallsPayload(),
                 series_title: document.getElementById('series_title').value,
                 viewer_count: document.getElementById('viewer_count').value,
                 team: document.getElementById('team').value,
@@ -407,6 +478,41 @@
             });
         });
 
+        async function applyNetworkCalls() {
+            const hint = document.getElementById('network-calls-admin-hint');
+            if (hint) hint.textContent = 'Saving network settings…';
+            try {
+                const res = await fetch('/api/overlay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ network_calls: collectNetworkCallsPayload() }),
+                });
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                fillForm(data);
+                msg('Network settings saved.', true);
+            } catch (e) {
+                console.error(e);
+                msg('Network settings save failed: ' + (e.message || e), false);
+                if (hint) hint.textContent = 'Save failed';
+            }
+        }
+
+        document.getElementById('btn-network-save').addEventListener('click', () => applyNetworkCalls());
+
+        document.querySelectorAll('.random-image-status-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                document.getElementById('random_image_status').value = btn.dataset.status;
+                document.querySelectorAll('.random-image-status-btn').forEach((b) => {
+                    const on = b === btn;
+                    b.classList.toggle('bg-slate-800', on);
+                    b.classList.toggle('text-white', on);
+                    b.classList.toggle('bg-slate-200', !on);
+                });
+                applyNetworkCalls();
+            });
+        });
+
         document.getElementById('btn-console-dual-preset').addEventListener('click', async () => {
             const hint = document.getElementById('console-log-admin-hint');
             hint.textContent = 'Applying dual_info_error preset…';
@@ -419,7 +525,7 @@
                             enabled: true,
                             mode: 'dual_info_error',
                             primary_interval_ms: 50,
-                            secondary_level: 'ERROR',
+                            secondary_levels: ['ERROR', 'WARN', 'FATAL', 'VERBOSE'],
                             secondary_count: 20,
                             secondary_cycle_ms: 10000,
                         },
@@ -428,7 +534,7 @@
                 if (!res.ok) throw new Error(await res.text());
                 const data = await res.json();
                 fillForm(data);
-                msg('Console log preset applied: INFO flood + ERROR burst.', true);
+                msg('Console log preset applied: INFO flood + multi-level burst.', true);
             } catch (e) {
                 console.error(e);
                 msg('Console log preset failed: ' + (e.message || e), false);

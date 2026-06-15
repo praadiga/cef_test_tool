@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Calls — L-Band</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            background: transparent;
+            font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+        }
+
+        /* Classic news L-band: vertical ad strip + bottom ticker bar */
+        .l-vertical {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 340px;
+            height: calc(100% - 112px);
+            background: linear-gradient(180deg, rgba(8, 12, 28, 0.94) 0%, rgba(18, 24, 48, 0.92) 100%);
+            border-right: 3px solid #e11d48;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .l-vertical-header {
+            padding: 14px 16px 10px;
+            background: #e11d48;
+            color: #fff;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .ad-frame {
+            flex: 1;
+            margin: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .ad-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .ad-placeholder {
+            color: #94a3b8;
+            font-size: 18px;
+            text-align: center;
+            padding: 20px;
+            line-height: 1.4;
+        }
+
+        .ad-meta {
+            padding: 8px 14px 12px;
+            font-size: 13px;
+            color: #94a3b8;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .l-horizontal {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 112px;
+            background: rgba(0, 0, 0, 0.82);
+            border-top: 3px solid #e11d48;
+            display: flex;
+            align-items: stretch;
+        }
+
+        .weather-badge {
+            width: 220px;
+            flex-shrink: 0;
+            background: #e11d48;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 0 18px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .weather-badge span {
+            font-size: 14px;
+            opacity: 0.9;
+            font-weight: 600;
+        }
+
+        .weather-badge strong {
+            font-size: 26px;
+            margin-top: 4px;
+        }
+
+        .ticker-wrap {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .ticker-track {
+            display: inline-block;
+            white-space: nowrap;
+            padding-left: 100%;
+            font-size: 36px;
+            font-weight: 600;
+            color: #f8fafc;
+            line-height: 112px;
+            animation: scroll-ticker 45s linear infinite;
+        }
+
+        @keyframes scroll-ticker {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        .status-pill {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 12px;
+            color: #64748b;
+            background: rgba(15, 23, 42, 0.75);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="status-pill" class="status-pill">loading…</div>
+
+    <aside class="l-vertical">
+        <div class="l-vertical-header">Sponsored</div>
+        <div class="ad-frame" id="ad-frame">
+            <div class="ad-placeholder" id="ad-placeholder">Waiting for /random-image…</div>
+            <img id="ad-image" alt="Sponsored" hidden />
+        </div>
+        <div class="ad-meta" id="ad-meta">Image: —</div>
+    </aside>
+
+    <footer class="l-horizontal">
+        <div class="weather-badge">
+            <span>Astro forecast</span>
+            <strong id="weather-headline">—</strong>
+        </div>
+        <div class="ticker-wrap">
+            <div class="ticker-track" id="weather-ticker">Fetching weather from 7timer…</div>
+        </div>
+    </footer>
+
+    <script>
+        const CLOUD_LABELS = ['Clear', 'Mostly clear', 'Partly cloudy', 'Mostly cloudy', 'Overcast', 'Very cloudy', 'Extremely cloudy', 'Overcast', 'Fog'];
+        const SEEING_LABELS = ['Poor', 'Poor', 'Average', 'Good', 'Excellent'];
+
+        const adImage = document.getElementById('ad-image');
+        const adPlaceholder = document.getElementById('ad-placeholder');
+        const adMeta = document.getElementById('ad-meta');
+        const weatherHeadline = document.getElementById('weather-headline');
+        const weatherTicker = document.getElementById('weather-ticker');
+        const statusPill = document.getElementById('status-pill');
+
+        let config = {
+            random_image_status: 200,
+            weather_interval_ms: 150000,
+            random_image_interval_ms: 300000,
+        };
+        let weatherTimer = null;
+        let imageTimer = null;
+        let configKey = '';
+        let lastImageAt = null;
+        let lastWeatherAt = null;
+
+        function cloudLabel(code) {
+            const idx = parseInt(code, 10);
+            if (!Number.isFinite(idx) || idx < 0) return 'Unknown';
+            return CLOUD_LABELS[Math.min(idx, CLOUD_LABELS.length - 1)] || 'Unknown';
+        }
+
+        function seeingLabel(code) {
+            const idx = parseInt(code, 10);
+            if (!Number.isFinite(idx) || idx < 1) return '—';
+            return SEEING_LABELS[Math.min(idx, SEEING_LABELS.length - 1)] || '—';
+        }
+
+        function formatTime(date) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function updateStatusPill() {
+            const img = lastImageAt ? formatTime(lastImageAt) : '—';
+            const wx = lastWeatherAt ? formatTime(lastWeatherAt) : '—';
+            statusPill.textContent = 'img ' + img + ' · wx ' + wx + ' · /random-image=' + config.random_image_status;
+        }
+
+        function normalizeConfig(raw) {
+            const c = raw && typeof raw === 'object' ? raw : {};
+            const status = parseInt(c.random_image_status, 10);
+            const weatherMs = parseInt(c.weather_interval_ms, 10);
+            const imageMs = parseInt(c.random_image_interval_ms, 10);
+            return {
+                random_image_status: status === 500 ? 500 : 200,
+                weather_interval_ms: Number.isFinite(weatherMs) && weatherMs >= 1000 ? weatherMs : 150000,
+                random_image_interval_ms: Number.isFinite(imageMs) && imageMs >= 1000 ? imageMs : 300000,
+            };
+        }
+
+        function summarizeWeather(data) {
+            const series = data && Array.isArray(data.dataseries) ? data.dataseries : [];
+            if (!series.length) return { headline: 'No data', ticker: '7timer returned no forecast points.' };
+            const next = series.slice(0, 6);
+            const headline = cloudLabel(next[0].cloudcover);
+            const parts = next.map((point) => {
+                const hours = point.timepoint;
+                return '+' + hours + 'h ' + cloudLabel(point.cloudcover)
+                    + ' · seeing ' + seeingLabel(point.seeing)
+                    + (point.temp2m != null ? ' · ' + point.temp2m + '°C' : '');
+            });
+            const ticker = parts.join('   •   ') + '   •   ';
+            return { headline: headline, ticker: ticker };
+        }
+
+        async function fetchWeather() {
+            try {
+                const res = await fetch('/api/weather');
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+                const summary = summarizeWeather(data);
+                weatherHeadline.textContent = summary.headline;
+                weatherTicker.textContent = summary.ticker;
+                lastWeatherAt = new Date();
+                updateStatusPill();
+            } catch (err) {
+                weatherHeadline.textContent = 'Error';
+                weatherTicker.textContent = 'Weather fetch failed: ' + (err.message || err) + '   •   ';
+                console.warn('[network-calls] weather', err);
+            }
+        }
+
+        function fetchRandomImage() {
+            adMeta.textContent = 'Image: fetching…';
+            adImage.onload = () => {
+                adImage.hidden = false;
+                adPlaceholder.hidden = true;
+                lastImageAt = new Date();
+                adMeta.textContent = 'Image: /random-image · ' + formatTime(lastImageAt);
+                updateStatusPill();
+            };
+            adImage.onerror = () => {
+                adImage.hidden = true;
+                adPlaceholder.hidden = false;
+                adPlaceholder.textContent = '/random-image failed (HTTP ' + config.random_image_status + ')';
+                adMeta.textContent = 'Image: error';
+                console.warn('[network-calls] /random-image load failed');
+            };
+            adImage.src = '/random-image?t=' + Date.now();
+        }
+
+        function restartTimers() {
+            if (weatherTimer) clearInterval(weatherTimer);
+            if (imageTimer) clearInterval(imageTimer);
+            fetchWeather();
+            fetchRandomImage();
+            weatherTimer = setInterval(fetchWeather, config.weather_interval_ms);
+            imageTimer = setInterval(fetchRandomImage, config.random_image_interval_ms);
+            updateStatusPill();
+        }
+
+        function applyConfig(raw) {
+            const next = normalizeConfig(raw);
+            const key = JSON.stringify(next);
+            const intervalsChanged = key !== configKey;
+            config = next;
+            configKey = key;
+            updateStatusPill();
+            if (intervalsChanged) {
+                restartTimers();
+            }
+        }
+
+        async function loadInitialState() {
+            const res = await fetch('/api/overlay');
+            if (!res.ok) throw new Error('GET /api/overlay failed');
+            const state = await res.json();
+            applyConfig(state.network_calls);
+        }
+
+        function connectStream() {
+            if (!window.EventSource) return;
+            const stream = new EventSource('/api/stream');
+            stream.onmessage = (event) => {
+                try {
+                    const state = JSON.parse(event.data);
+                    applyConfig(state.network_calls);
+                } catch (err) {
+                    console.warn('[network-calls] bad SSE payload', err);
+                }
+            };
+        }
+
+        loadInitialState()
+            .then(connectStream)
+            .catch((err) => {
+                console.error('[network-calls] init failed', err);
+                statusPill.textContent = 'init failed';
+            });
+    </script>
+</body>
+</html>
