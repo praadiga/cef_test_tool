@@ -21,17 +21,6 @@
         <form id="overlay-form" class="space-y-8" onsubmit="return false;">
 
             <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
-                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Sounds on /main</h2>
-                <p class="text-sm text-slate-600">Plays on the live overlay page (same SSE as overlay). Add <code class="bg-slate-100 px-1 rounded">static/sounds/&lt;clip&gt;.mp3</code> or the page uses short beeps.</p>
-                <div class="flex flex-wrap gap-2">
-                    <!-- <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="four">Four</button>
-                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="six">Six</button>
-                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="wicket">Wicket</button> -->
-                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="cheer">Cheer</button>
-                </div>
-            </section>
-
-            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HLS <code class="text-sm font-mono">/video_hls</code></h2>
                 <p class="text-sm text-slate-600">HLS (M3U8) is played on the full-page <code class="bg-slate-100 px-1 rounded">/video_hls</code> page. The player listens to the same <code class="bg-slate-100 px-1 rounded">/api/stream</code> (SSE) feed and reloads or stops when you change this state. Server also logs to stdout with the prefix <code class="bg-slate-100 px-1 rounded">[hls api]</code>.</p>
                 <div class="space-y-2">
@@ -45,18 +34,6 @@
                     <button type="button" id="btn-hls-stop" class="px-3 py-2 rounded bg-rose-600 text-white text-sm">Stop HLS</button>
                 </div>
                 <p id="hls-admin-hint" class="text-xs text-slate-500" aria-live="polite"></p>
-            </section>
-
-            <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
-                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HTTP /main test</h2>
-                <p class="text-sm text-slate-600">Which response <code class="bg-slate-100 px-1 rounded">/main</code> returns (graphics only on 200).</p>
-                <div class="flex flex-wrap gap-2">
-                    <button type="button" class="px-3 py-2 rounded bg-slate-800 text-white text-sm main-status-btn" data-status="200">200 OK</button>
-                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="404">404</button>
-                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="500">500</button>
-                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="503">503</button>
-                </div>
-                <input type="hidden" id="main_status" value="200" />
             </section>
 
             <section class="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
@@ -134,10 +111,33 @@
 
             <details class="bg-white rounded-lg border border-slate-200 shadow-sm">
                 <summary class="cursor-pointer select-none p-5 text-lg font-semibold">
-                    Match overlay fields
-                    <span class="block text-sm font-normal text-slate-600 mt-1">Score, batters, bowler, ticker, and recent balls.</span>
+                    <code class="text-base font-mono">/main</code> overlay
+                    <span class="block text-sm font-normal text-slate-600 mt-1">HTTP status, sounds, graphics fields, ticker, and recent balls.</span>
                 </summary>
                 <div class="px-5 pb-5 space-y-3">
+            <section class="rounded-lg border border-slate-200 p-5 space-y-3">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">HTTP response</h2>
+                <p class="text-sm text-slate-600">Which response <code class="bg-slate-100 px-1 rounded">/main</code> returns (graphics overlay only on 200).</p>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="px-3 py-2 rounded bg-slate-800 text-white text-sm main-status-btn" data-status="200">200 OK</button>
+                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="404">404</button>
+                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="500">500</button>
+                    <button type="button" class="px-3 py-2 rounded bg-slate-200 text-sm main-status-btn" data-status="503">503</button>
+                </div>
+                <input type="hidden" id="main_status" value="200" />
+            </section>
+
+            <section class="rounded-lg border border-slate-200 p-5 space-y-3">
+                <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Sounds</h2>
+                <p class="text-sm text-slate-600">Queue a clip on the live <code class="bg-slate-100 px-1 rounded">/main</code> page (same SSE as overlay). Add <code class="bg-slate-100 px-1 rounded">static/sounds/&lt;clip&gt;.mp3</code> or the page uses short beeps.</p>
+                <div class="flex flex-wrap gap-2">
+                    <!-- <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="four">Four</button>
+                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="six">Six</button>
+                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="wicket">Wicket</button> -->
+                    <button type="button" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm sound-btn" data-clip="cheer">Cheer</button>
+                </div>
+            </section>
+
             <section class="rounded-lg border border-slate-200 p-5 space-y-3">
                 <h2 class="text-lg font-semibold border-b border-slate-100 pb-2">Match &amp; top bar</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
