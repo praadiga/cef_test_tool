@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Heavy Stress</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            background: #020617;
+            color: #e2e8f0;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+        body {
+            padding: 76px 18px 18px;
+        }
+        .hud {
+            position: fixed;
+            z-index: 50;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: rgba(2, 6, 23, 0.94);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.36);
+            font-size: 13px;
+        }
+        .hud strong {
+            font-size: 15px;
+        }
+        .hud code {
+            color: #bfdbfe;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 4px;
+            padding: 2px 5px;
+        }
+        button {
+            cursor: pointer;
+            border: 1px solid rgba(148, 163, 184, 0.34);
+            border-radius: 7px;
+            padding: 7px 11px;
+            background: #1e293b;
+            color: #fff;
+            font-weight: 700;
+        }
+        button.danger {
+            background: #7f1d1d;
+        }
+        .section-title {
+            margin: 22px 0 12px;
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .section-title h2 {
+            margin: 0;
+            font-size: 22px;
+        }
+        .section-title span {
+            color: #94a3b8;
+            font-size: 13px;
+        }
+        .grid {
+            display: grid;
+            gap: 12px;
+        }
+        .image-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        }
+        .video-grid {
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        }
+        .card {
+            position: relative;
+            overflow: hidden;
+            min-height: 160px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.86);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+            transform: translateZ(0);
+        }
+        .card img,
+        .card video {
+            display: block;
+            width: 100%;
+            height: 100%;
+            min-height: inherit;
+            object-fit: cover;
+        }
+        .card video {
+            aspect-ratio: 16 / 9;
+        }
+        .label {
+            position: absolute;
+            left: 8px;
+            bottom: 8px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            color: #e2e8f0;
+            background: rgba(2, 6, 23, 0.76);
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 11px;
+        }
+        .error {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            color: #fecaca;
+            text-align: center;
+            background: rgba(127, 29, 29, 0.8);
+        }
+        .card.failed .error {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <div class="hud">
+        <strong>Media-heavy stress</strong>
+        <span id="stats">initializing…</span>
+        <button type="button" id="btn-pause-videos">Pause videos</button>
+        <button type="button" id="btn-play-videos">Play videos</button>
+        <button type="button" id="btn-clear" class="danger">Remove all media</button>
+        <span>Params: <code>?images=140&amp;videos=24&amp;autoplay=1</code></span>
+    </div>
+
+    <section>
+        <div class="section-title">
+            <h2>Images</h2>
+            <span>{{ image_count }} elements via <code>/random-image</code></span>
+        </div>
+        <div id="image-grid" class="grid image-grid"></div>
+    </section>
+
+    <section>
+        <div class="section-title">
+            <h2>Videos</h2>
+            <span>{{ video_count }} elements via <code>{{ video_url }}</code></span>
+        </div>
+        <div id="video-grid" class="grid video-grid"></div>
+    </section>
+
+    <script>
+        (function () {
+            'use strict';
+
+            const IMAGE_COUNT = {{ image_count }};
+            const VIDEO_COUNT = {{ video_count }};
+            const VIDEO_URL = {{ video_url | tojson }};
+            const AUTOPLAY = {{ "true" if autoplay else "false" }};
+
+            const imageGrid = document.getElementById('image-grid');
+            const videoGrid = document.getElementById('video-grid');
+            const stats = document.getElementById('stats');
+            let imageLoaded = 0;
+            let imageFailed = 0;
+            let videoReady = 0;
+            let videoFailed = 0;
+
+            function updateStats() {
+                const mem = performance.memory
+                    ? ' · JS heap ' + Math.round(performance.memory.usedJSHeapSize / 1048576) + 'MB'
+                    : '';
+                stats.textContent = 'images ' + imageLoaded + '/' + IMAGE_COUNT
+                    + ' loaded, ' + imageFailed + ' failed'
+                    + ' · videos ' + videoReady + '/' + VIDEO_COUNT
+                    + ' ready, ' + videoFailed + ' failed'
+                    + mem;
+            }
+
+            function markFailed(card, message) {
+                card.classList.add('failed');
+                card.querySelector('.error').textContent = message;
+            }
+
+            function addImages() {
+                for (let i = 0; i < IMAGE_COUNT; i += 1) {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+
+                    const img = document.createElement('img');
+                    img.loading = 'eager';
+                    img.decoding = 'async';
+                    img.alt = 'stress image ' + (i + 1);
+                    // Unique query avoids the browser reusing one decoded bitmap for every tile.
+                    img.src = '/random-image?tile=' + i + '&t=' + Date.now();
+
+                    const label = document.createElement('div');
+                    label.className = 'label';
+                    label.textContent = 'img #' + (i + 1);
+
+                    const error = document.createElement('div');
+                    error.className = 'error';
+
+                    img.addEventListener('load', function () {
+                        imageLoaded += 1;
+                        updateStats();
+                    });
+                    img.addEventListener('error', function () {
+                        imageFailed += 1;
+                        markFailed(card, 'image failed');
+                        updateStats();
+                    });
+
+                    card.appendChild(img);
+                    card.appendChild(label);
+                    card.appendChild(error);
+                    imageGrid.appendChild(card);
+                }
+            }
+
+            function addVideos() {
+                for (let i = 0; i < VIDEO_COUNT; i += 1) {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+
+                    const video = document.createElement('video');
+                    video.src = VIDEO_URL + '?copy=' + i;
+                    video.muted = true;
+                    video.loop = true;
+                    video.playsInline = true;
+                    video.preload = 'auto';
+                    if (AUTOPLAY) video.autoplay = true;
+
+                    const label = document.createElement('div');
+                    label.className = 'label';
+                    label.textContent = 'video #' + (i + 1);
+
+                    const error = document.createElement('div');
+                    error.className = 'error';
+
+                    video.addEventListener('canplay', function onCanPlay() {
+                        video.removeEventListener('canplay', onCanPlay);
+                        videoReady += 1;
+                        if (AUTOPLAY) {
+                            video.play().catch(function () {});
+                        }
+                        updateStats();
+                    });
+                    video.addEventListener('error', function () {
+                        videoFailed += 1;
+                        markFailed(card, 'video failed');
+                        updateStats();
+                    });
+
+                    card.appendChild(video);
+                    card.appendChild(label);
+                    card.appendChild(error);
+                    videoGrid.appendChild(card);
+                }
+            }
+
+            document.getElementById('btn-pause-videos').addEventListener('click', function () {
+                document.querySelectorAll('video').forEach(function (video) {
+                    video.pause();
+                });
+            });
+
+            document.getElementById('btn-play-videos').addEventListener('click', function () {
+                document.querySelectorAll('video').forEach(function (video) {
+                    video.play().catch(function () {});
+                });
+            });
+
+            document.getElementById('btn-clear').addEventListener('click', function () {
+                document.querySelectorAll('video').forEach(function (video) {
+                    video.pause();
+                    video.removeAttribute('src');
+                    video.load();
+                });
+                imageGrid.textContent = '';
+                videoGrid.textContent = '';
+                stats.textContent = 'all media nodes removed';
+            });
+
+            addImages();
+            addVideos();
+            updateStats();
+            setInterval(updateStats, 1000);
+        })();
+    </script>
+</body>
+</html>

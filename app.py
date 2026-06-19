@@ -174,6 +174,7 @@ ROUTE_DOCS = {
     "display_hls2": "Same look as /video, but when HLS is enabled in admin, plays the configured M3U8; else falls back to output2.mp4. Reports client errors to the server on failure.",
     "cheer_sound": "Plays a bundled cheer MP3 shortly after load (sounds/ test).",
     "stress_client": "Heavy in-browser CSS/JS (canvas, workers) to stress CEF (CPU/memory/compositing).",
+    "media_heavy": "Media-heavy page: renders many images and videos to stress browser memory, decoders, layout, and painting.",
     "audio": "Renders audio.html and attempts to autoplay static/sounds/audio.mp3.",
     "fail_midway": "Streams partial HTML, waits, then aborts the body (mid-stream failure; optional ?delay= and ?http_status=).",
 }
@@ -195,6 +196,7 @@ ROUTE_EXAMPLE_KWARGS = {
     "display_hls2": {},
     "cheer_sound": {},
     "stress_client": {},
+    "media_heavy": {},
     "redirect_route": {},
     "audio": {},
     "console_log_page": {},
@@ -447,6 +449,25 @@ def cheer_sound():
 def stress_client():
     """Heavy client-side HTML/CSS/JS to stress CEF: compositing, memory, and CPU in the browser."""
     return render_template("stress.html")
+
+
+@app.route("/media-heavy")
+def media_heavy():
+    """Many image/video elements for browser memory, decode, paint, and layout testing."""
+    def bounded_int(name: str, default: int, min_value: int, max_value: int) -> int:
+        try:
+            value = int(request.args.get(name, default))
+        except (TypeError, ValueError):
+            value = default
+        return max(min_value, min(value, max_value))
+
+    return render_template(
+        "media_heavy.html",
+        image_count=bounded_int("images", 140, 0, 500),
+        video_count=bounded_int("videos", 24, 0, 120),
+        autoplay=request.args.get("autoplay", "1") not in ("0", "false", "no"),
+        video_url="/static/output2.mp4",
+    )
 
 
 @app.route("/audio")
