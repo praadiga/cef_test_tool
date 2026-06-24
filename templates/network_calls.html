@@ -151,6 +151,9 @@
 </head>
 <body>
     <div id="status-pill" class="status-pill">loading…</div>
+    <audio id="network-audio" autoplay loop preload="auto">
+        <source src="{{ audio_url }}" type="audio/mpeg">
+    </audio>
 
     <aside class="l-vertical">
         <div class="l-vertical-header">Sponsored</div>
@@ -181,6 +184,7 @@
         const weatherHeadline = document.getElementById('weather-headline');
         const weatherTicker = document.getElementById('weather-ticker');
         const statusPill = document.getElementById('status-pill');
+        const networkAudio = document.getElementById('network-audio');
 
         let config = {
             random_image_status: 200,
@@ -192,6 +196,7 @@
         let configKey = '';
         let lastImageAt = null;
         let lastWeatherAt = null;
+        let audioState = 'pending';
         let logSeq = 0;
 
         function logNetwork(level, event, details) {
@@ -207,6 +212,16 @@
             } else {
                 console.info(message);
             }
+        }
+
+        function audioLog(level, status, details) {
+            logNetwork(
+                level,
+                'audio_status',
+                'status=' + status
+                    + ' url=' + JSON.stringify(networkAudio.currentSrc || networkAudio.querySelector('source').src)
+                    + (details ? ' ' + details : '')
+            );
         }
 
         function cloudLabel(code) {
@@ -228,7 +243,37 @@
         function updateStatusPill() {
             const img = lastImageAt ? formatTime(lastImageAt) : '—';
             const wx = lastWeatherAt ? formatTime(lastWeatherAt) : '—';
-            statusPill.textContent = 'img ' + img + ' · wx ' + wx + ' · /random-image=' + config.random_image_status;
+            statusPill.textContent = 'img ' + img
+                + ' · wx ' + wx
+                + ' · audio ' + audioState
+                + ' · /random-image=' + config.random_image_status;
+        }
+
+        function attemptAudioAutoplay() {
+            if (!networkAudio) return;
+            logNetwork('INFO', 'audio_autoplay_start', 'url=' + (networkAudio.currentSrc || networkAudio.querySelector('source').src));
+            const playPromise = networkAudio.play();
+            if (!playPromise || typeof playPromise.then !== 'function') {
+                audioState = networkAudio.paused ? 'blocked' : 'playing';
+                logNetwork('INFO', 'audio_autoplay_result', 'state=' + audioState);
+                updateStatusPill();
+                return;
+            }
+            playPromise
+                .then(() => {
+                    audioState = 'playing';
+                    audioLog('INFO', 'PLAYING', 'reason=autoplay_ok muted=' + networkAudio.muted + ' loop=' + networkAudio.loop);
+                    updateStatusPill();
+                })
+                .catch((err) => {
+                    audioState = 'blocked';
+                    audioLog(
+                        'WARN',
+                        'FAILED',
+                        'reason=autoplay_blocked error=' + JSON.stringify(String(err && err.message ? err.message : err))
+                    );
+                    updateStatusPill();
+                });
         }
 
         function normalizeConfig(raw) {
@@ -374,10 +419,38 @@
 
         loadInitialState()
             .then(connectStream)
+            .then(attemptAudioAutoplay)
             .catch((err) => {
                 console.error('[network-calls] init failed', err);
                 statusPill.textContent = 'init failed';
             });
+
+        networkAudio.addEventListener('playing', () => {
+            audioState = 'playing';
+            audioLog('INFO', 'PLAYING', 'reason=playing_event current_time=' + networkAudio.currentTime.toFixed(2));
+            updateStatusPill();
+        });
+        networkAudio.addEventListener('pause', () => {
+            audioState = 'paused';
+            audioLog('WARN', 'FAILED', 'reason=paused current_time=' + networkAudio.currentTime.toFixed(2));
+            updateStatusPill();
+        });
+        networkAudio.addEventListener('ended', () => {
+            audioState = 'ended';
+            audioLog('WARN', 'FAILED', 'reason=ended');
+            updateStatusPill();
+        });
+        networkAudio.addEventListener('error', () => {
+            audioState = 'error';
+            const err = networkAudio.error;
+            audioLog(
+                'ERROR',
+                'FAILED',
+                'reason=source_error network_state=' + networkAudio.networkState
+                    + ' error_code=' + (err ? err.code : 'unknown')
+            );
+            updateStatusPill();
+        });
     </script>
 </body>
 </html>

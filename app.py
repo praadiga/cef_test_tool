@@ -485,7 +485,10 @@ def console_log_page():
 
 @app.route("/network-calls")
 def network_calls_page():
-    return render_template("network_calls.html")
+    return render_template(
+        "network_calls.html",
+        audio_url=url_for("static", filename="sounds/audio.mp3"),
+    )
 
 
 @app.route("/random-image")
