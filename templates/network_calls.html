@@ -192,6 +192,22 @@
         let configKey = '';
         let lastImageAt = null;
         let lastWeatherAt = null;
+        let logSeq = 0;
+
+        function logNetwork(level, event, details) {
+            logSeq += 1;
+            const message = '[CEF_TEST] [network-calls] [' + level + '] seq=' + logSeq
+                + ' event=' + event
+                + ' t=' + Date.now()
+                + (details ? ' ' + details : '');
+            if (level === 'ERROR') {
+                console.error(message);
+            } else if (level === 'WARN') {
+                console.warn(message);
+            } else {
+                console.info(message);
+            }
+        }
 
         function cloudLabel(code) {
             const idx = parseInt(code, 10);
@@ -243,6 +259,8 @@
         }
 
         async function fetchWeather() {
+            const startedAt = performance.now();
+            logNetwork('INFO', 'weather_fetch_start', 'url=/api/weather');
             try {
                 const res = await fetch('/api/weather');
                 const data = await res.json();
@@ -252,14 +270,28 @@
                 weatherTicker.textContent = summary.ticker;
                 lastWeatherAt = new Date();
                 updateStatusPill();
+                logNetwork(
+                    'INFO',
+                    'weather_fetch_ok',
+                    'status=' + res.status
+                        + ' duration_ms=' + Math.round(performance.now() - startedAt)
+                        + ' points=' + ((data.dataseries && data.dataseries.length) || 0)
+                );
             } catch (err) {
                 weatherHeadline.textContent = 'Error';
                 weatherTicker.textContent = 'Weather fetch failed: ' + (err.message || err) + '   •   ';
-                console.warn('[network-calls] weather', err);
+                logNetwork(
+                    'ERROR',
+                    'weather_fetch_failed',
+                    'duration_ms=' + Math.round(performance.now() - startedAt)
+                        + ' error=' + JSON.stringify(String(err && err.message ? err.message : err))
+                );
             }
         }
 
         function fetchRandomImage() {
+            const requestedAt = Date.now();
+            logNetwork('INFO', 'image_fetch_start', 'url=/random-image configured_status=' + config.random_image_status);
             adMeta.textContent = 'Image: fetching…';
             adImage.onload = () => {
                 adImage.hidden = false;
@@ -267,13 +299,19 @@
                 lastImageAt = new Date();
                 adMeta.textContent = 'Image: /random-image · ' + formatTime(lastImageAt);
                 updateStatusPill();
+                logNetwork('INFO', 'image_fetch_ok', 'duration_ms=' + (Date.now() - requestedAt));
             };
             adImage.onerror = () => {
                 adImage.hidden = true;
                 adPlaceholder.hidden = false;
                 adPlaceholder.textContent = '/random-image failed (HTTP ' + config.random_image_status + ')';
                 adMeta.textContent = 'Image: error';
-                console.warn('[network-calls] /random-image load failed');
+                logNetwork(
+                    'ERROR',
+                    'image_fetch_failed',
+                    'duration_ms=' + (Date.now() - requestedAt)
+                        + ' configured_status=' + config.random_image_status
+                );
             };
             adImage.src = '/random-image?t=' + Date.now();
         }
@@ -296,15 +334,24 @@
             configKey = key;
             updateStatusPill();
             if (intervalsChanged) {
+                logNetwork(
+                    'INFO',
+                    'config_changed',
+                    'random_image_status=' + config.random_image_status
+                        + ' weather_interval_ms=' + config.weather_interval_ms
+                        + ' random_image_interval_ms=' + config.random_image_interval_ms
+                );
                 restartTimers();
             }
         }
 
         async function loadInitialState() {
+            logNetwork('INFO', 'initial_state_fetch_start', 'url=/api/overlay');
             const res = await fetch('/api/overlay');
             if (!res.ok) throw new Error('GET /api/overlay failed');
             const state = await res.json();
             applyConfig(state.network_calls);
+            logNetwork('INFO', 'initial_state_fetch_ok', 'status=' + res.status);
         }
 
         function connectStream() {
@@ -313,9 +360,14 @@
             stream.onmessage = (event) => {
                 try {
                     const state = JSON.parse(event.data);
+                    logNetwork('INFO', 'sse_state_received', 'has_network_calls=' + !!state.network_calls);
                     applyConfig(state.network_calls);
                 } catch (err) {
-                    console.warn('[network-calls] bad SSE payload', err);
+                    logNetwork(
+                        'WARN',
+                        'sse_bad_payload',
+                        'error=' + JSON.stringify(String(err && err.message ? err.message : err))
+                    );
                 }
             };
         }
