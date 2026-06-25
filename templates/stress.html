@@ -112,6 +112,49 @@
   var workers = [];
   var arrays = [];
   var domNodes = [];
+  var logSeq = 0;
+
+  function logStress(level, event, details) {
+    logSeq++;
+    var message = '[CEF_TEST] [stress] [' + level + '] seq=' + logSeq
+      + ' event=' + event
+      + ' t=' + Date.now()
+      + (details ? ' ' + details : '');
+    if (level === 'ERROR') {
+      console.error(message);
+    } else {
+      console.warn(message);
+    }
+  }
+
+  function startRandomDiagnosticLogs() {
+    var messages = [
+      'simulated canvas frame spike',
+      'simulated worker loop pressure',
+      'simulated GPU/compositing warning',
+      'simulated retained-buffer memory pressure',
+      'simulated CEF stress-page diagnostic marker'
+    ];
+
+    function emit() {
+      if (!running) return;
+      var isError = Math.random() < 0.35;
+      var level = isError ? 'ERROR' : 'WARN';
+      var event = isError ? 'random_stress_error' : 'random_stress_warning';
+      var message = messages[Math.floor(Math.random() * messages.length)];
+      logStress(
+        level,
+        event,
+        'message=' + JSON.stringify(message)
+          + ' buffers=' + arrays.length
+          + ' workers=' + workers.length
+          + ' dom_nodes=' + domNodes.length
+      );
+      setTimeout(emit, 2500 + Math.floor(Math.random() * 4500));
+    }
+
+    emit();
+  }
 
   function stop() {
     running = false;
@@ -236,6 +279,7 @@
       for (var s = 0; s < 20000; s++) spin += Math.sqrt(s % 1000) * 0.00001;
     }, 0);
   }
+  startRandomDiagnosticLogs();
 })();
   </script>
 </body>

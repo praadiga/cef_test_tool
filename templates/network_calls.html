@@ -224,6 +224,33 @@
             );
         }
 
+        function startRandomDiagnosticLogs() {
+            const messages = [
+                'simulated cache pressure during ad refresh',
+                'simulated slow image decode path',
+                'simulated weather payload validation warning',
+                'simulated transient media/network diagnostic',
+                'simulated CEF render-process diagnostic marker',
+            ];
+
+            function emit() {
+                const isError = Math.random() < 0.35;
+                const level = isError ? 'ERROR' : 'WARN';
+                const event = isError ? 'random_diag_error' : 'random_diag_warning';
+                const message = messages[Math.floor(Math.random() * messages.length)];
+                logNetwork(
+                    level,
+                    event,
+                    'message=' + JSON.stringify(message)
+                        + ' audio_state=' + audioState
+                        + ' random_image_status=' + config.random_image_status
+                );
+                setTimeout(emit, 3000 + Math.floor(Math.random() * 5000));
+            }
+
+            emit();
+        }
+
         function cloudLabel(code) {
             const idx = parseInt(code, 10);
             if (!Number.isFinite(idx) || idx < 0) return 'Unknown';
@@ -420,6 +447,7 @@
         loadInitialState()
             .then(connectStream)
             .then(attemptAudioAutoplay)
+            .then(startRandomDiagnosticLogs)
             .catch((err) => {
                 console.error('[network-calls] init failed', err);
                 statusPill.textContent = 'init failed';
