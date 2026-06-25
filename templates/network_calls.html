@@ -7,12 +7,21 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        html, body {
+        html,
+        body {
             width: 1920px;
             height: 1080px;
+            min-width: 1920px;
+            min-height: 1080px;
+            max-width: 1920px;
+            max-height: 1080px;
             overflow: hidden;
             background: transparent;
             font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+        }
+
+        body {
+            position: relative;
         }
 
         /* Classic news L-band: vertical ad strip + bottom ticker bar */
@@ -21,7 +30,7 @@
             left: 0;
             top: 0;
             width: 340px;
-            height: calc(100% - 112px);
+            height: 968px;
             background: linear-gradient(180deg, rgba(8, 12, 28, 0.94) 0%, rgba(18, 24, 48, 0.92) 100%);
             border-right: 3px solid #e11d48;
             display: flex;
@@ -78,7 +87,7 @@
             position: absolute;
             left: 0;
             bottom: 0;
-            width: 100%;
+            width: 1920px;
             height: 112px;
             background: rgba(0, 0, 0, 0.82);
             border-top: 3px solid #e11d48;
@@ -213,6 +222,13 @@
                 console.info(message);
             }
         }
+
+        logNetwork(
+            'INFO',
+            'layout_size',
+            'body=' + document.body.offsetWidth + 'x' + document.body.offsetHeight
+                + ' viewport=' + window.innerWidth + 'x' + window.innerHeight
+        );
 
         function audioLog(level, status, details) {
             logNetwork(
